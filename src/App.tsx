@@ -11,6 +11,7 @@ interface AppProps {
   initialTasks?: Task[];
   initialLists?: TodoList[];
   initialCurrentList?: TodoList;
+  initialSelectedTaskId?: string | null;
 }
 
 export const App: React.FC<AppProps> = ({
@@ -18,6 +19,7 @@ export const App: React.FC<AppProps> = ({
   initialTasks,
   initialLists,
   initialCurrentList,
+  initialSelectedTaskId,
 }) => {
   const { isDesktop } = useViewport(viewportWidth);
 
@@ -26,6 +28,7 @@ export const App: React.FC<AppProps> = ({
       initialTasks={initialTasks}
       initialLists={initialLists}
       initialCurrentList={initialCurrentList}
+      initialSelectedTaskId={initialSelectedTaskId}
     >
       {isDesktop ? (
         <DesktopGuard>

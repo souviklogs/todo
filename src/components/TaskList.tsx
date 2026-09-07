@@ -29,8 +29,15 @@ const DEFAULT_EMPTY_STATE: EmptyStateConfig = {
 };
 
 export const TaskList: React.FC = () => {
-  const { currentTasks, currentList, toggleTask, deleteTask, toggleImportant, toggleMyDay } =
-    useTodoContext();
+  const {
+    currentTasks,
+    currentList,
+    toggleTask,
+    deleteTask,
+    toggleImportant,
+    toggleMyDay,
+    setSelectedTaskId,
+  } = useTodoContext();
 
   if (currentTasks.length === 0) {
     const { iconWrapperClass, icon, description } =
@@ -63,6 +70,7 @@ export const TaskList: React.FC = () => {
           onDelete={deleteTask}
           onToggleImportant={toggleImportant}
           onToggleMyDay={toggleMyDay}
+          onSelect={setSelectedTaskId}
         />
       ))}
     </ul>

@@ -5,6 +5,7 @@ import { TaskList } from './TaskList';
 import { QuickAddBar } from './QuickAddBar';
 import { NavigationDrawer, renderListIcon } from './NavigationDrawer';
 import { ListModal } from './ListModal';
+import { TaskDetailView } from './TaskDetailView';
 import { getThemeGradient } from '../constants/theme';
 
 interface MobileShellProps {
@@ -12,7 +13,14 @@ interface MobileShellProps {
 }
 
 export const MobileShell: React.FC<MobileShellProps> = ({ children }) => {
-  const { currentList, currentTasks, updateList, deleteList } = useTodoContext();
+  const {
+    currentList,
+    currentTasks,
+    updateList,
+    deleteList,
+    selectedTask,
+    setSelectedTaskId,
+  } = useTodoContext();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isOptionsMenuOpen, setIsOptionsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -132,6 +140,12 @@ export const MobileShell: React.FC<MobileShellProps> = ({ children }) => {
       <NavigationDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
+      />
+
+      {/* Slide-in Task Detail View */}
+      <TaskDetailView
+        task={selectedTask}
+        onClose={() => setSelectedTaskId(null)}
       />
 
       {/* Edit List Modal from Header Options */}
