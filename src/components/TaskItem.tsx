@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check, Trash2, Star, Sun } from 'lucide-react';
 import type { Task } from '../types/todo';
+import { getStepProgress } from '../types/todo';
 
 interface TaskItemProps {
   task: Task;
@@ -21,10 +22,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 }) => {
   const isStarred = Boolean(task.isImportant);
   const isInMyDay = Boolean(task.inMyDay);
-  const steps = task.steps ?? [];
-  const hasSteps = steps.length > 0;
-  const totalSteps = steps.length;
-  const completedSteps = steps.filter((s) => s.completed).length;
+  const stepProgress = getStepProgress(task.steps);
 
   return (
     <li
@@ -60,12 +58,12 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         >
           {task.title}
         </span>
-        {hasSteps && (
+        {stepProgress && (
           <span
             data-testid={`task-steps-progress-${task.id}`}
             className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5"
           >
-            {completedSteps} of {totalSteps} {totalSteps === 1 ? 'step' : 'steps'}
+            {stepProgress.label}
           </span>
         )}
       </div>

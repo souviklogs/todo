@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Check, Plus, Trash2 } from 'lucide-react';
 import type { Task } from '../types/todo';
+import { getStepProgress } from '../types/todo';
 import { useTodoContext } from '../context/TodoContext';
 
 interface TaskDetailViewProps {
@@ -28,8 +29,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
   if (!task) return null;
 
   const steps = task.steps ?? [];
-  const totalSteps = steps.length;
-  const completedSteps = steps.filter((s) => s.completed).length;
+  const stepProgress = getStepProgress(steps);
 
   const handleAddStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,18 +128,18 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
             <h3 className="text-xs font-semibold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
               Steps
             </h3>
-            {totalSteps > 0 && (
+            {stepProgress && (
               <span
                 data-testid="detail-steps-progress"
                 className="text-xs font-medium text-slate-500 dark:text-neutral-400"
               >
-                {completedSteps} of {totalSteps} {totalSteps === 1 ? 'step' : 'steps'}
+                {stepProgress.label}
               </span>
             )}
           </div>
 
           {/* Steps List */}
-          {totalSteps > 0 && (
+          {steps.length > 0 && (
             <ul data-testid="detail-steps-list" className="space-y-2">
               {steps.map((step) => (
                 <li

@@ -236,7 +236,6 @@ interface TodoProviderProps {
   initialTasks?: Task[];
   initialLists?: TodoList[];
   initialCurrentList?: TodoList;
-  initialSelectedTaskId?: string | null;
 }
 
 export const TodoProvider: React.FC<TodoProviderProps> = ({
@@ -244,7 +243,6 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   initialTasks,
   initialLists,
   initialCurrentList,
-  initialSelectedTaskId,
 }) => {
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (initialTasks) return initialTasks;
@@ -259,9 +257,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     const loaded = initialLists ?? loadStoredLists();
     return loaded.find((l) => l.id === DEFAULT_LIST.id) ?? loaded[0] ?? DEFAULT_LIST;
   });
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
-    initialSelectedTaskId ?? null
-  );
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const selectedTask = useMemo(() => {
     if (!selectedTaskId) return null;

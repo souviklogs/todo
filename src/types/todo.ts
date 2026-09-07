@@ -4,6 +4,23 @@ export interface Step {
   completed: boolean;
 }
 
+export interface StepProgress {
+  total: number;
+  completed: number;
+  label: string;
+}
+
+export function getStepProgress(steps?: Step[]): StepProgress | null {
+  if (!steps || steps.length === 0) return null;
+  const total = steps.length;
+  const completed = steps.filter((s) => s.completed).length;
+  return {
+    total,
+    completed,
+    label: `${completed} of ${total} ${total === 1 ? 'step' : 'steps'}`,
+  };
+}
+
 export interface Task {
   id: string;
   title: string;

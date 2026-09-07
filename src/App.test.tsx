@@ -2,7 +2,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
 import { expireStaleMyDayTasks } from './context/TodoContext';
-import type { Task } from './types/todo';
+import { getStepProgress, type Task } from './types/todo';
 
 describe('App Component Integration Tests', () => {
   let originalInnerWidth: number;
@@ -1372,6 +1372,29 @@ describe('App Component Integration Tests', () => {
       // Detail view closes and task is removed from list
       expect(screen.queryByTestId('task-detail-view')).not.toBeInTheDocument();
       expect(screen.queryByText('Welcome to Tasks!')).not.toBeInTheDocument();
+    });
+
+    it('getStepProgress computes progress stats and formatted label correctly', () => {
+      expect(getStepProgress(undefined)).toBeNull();
+      expect(getStepProgress([])).toBeNull();
+
+      expect(getStepProgress([{ id: '1', title: 'Step 1', completed: false }])).toEqual({
+        total: 1,
+        completed: 0,
+        label: '0 of 1 step',
+      });
+
+      expect(
+        getStepProgress([
+          { id: '1', title: 'Step 1', completed: true },
+          { id: '2', title: 'Step 2', completed: false },
+          { id: '3', title: 'Step 3', completed: true },
+        ])
+      ).toEqual({
+        total: 3,
+        completed: 2,
+        label: '2 of 3 steps',
+      });
     });
   });
 });
