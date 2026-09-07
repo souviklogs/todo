@@ -25,4 +25,4 @@ dist-ssr
 
 # NightShift
 .env.nightshift
-.nightshift/*
+.nightshift/
