@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import type { Task, TodoList } from '../types/todo';
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
@@ -47,7 +47,6 @@ export function loadStoredTasks(): Task[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_TASKS);
     if (raw === null) {
-      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(DEFAULT_TASKS));
       return DEFAULT_TASKS;
     }
     return JSON.parse(raw);
@@ -68,6 +67,7 @@ export function saveStoredTasks(tasks: Task[]): void {
 
 interface TodoContextType {
   tasks: Task[];
+  currentTasks: Task[];
   lists: TodoList[];
   currentList: TodoList;
   setCurrentList: (list: TodoList) => void;
@@ -91,6 +91,16 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({ children, initialTas
   const [lists] = useState<TodoList[]>([DEFAULT_LIST]);
   const [currentList, setCurrentList] = useState<TodoList>(DEFAULT_LIST);
 
+  // Synchronize tasks to localStorage whenever tasks change
+  useEffect(() => {
+    saveStoredTasks(tasks);
+  }, [tasks]);
+
+  const currentTasks = useMemo(
+    () => tasks.filter((t) => !t.listId || t.listId === currentList.id),
+    [tasks, currentList.id]
+  );
+
   const addTask = useCallback((title: string, listId?: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -105,35 +115,24 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({ children, initialTas
       createdAt: new Date().toISOString(),
     };
 
-    setTasks((prev) => {
-      const next = [...prev, newTask];
-      saveStoredTasks(next);
-      return next;
-    });
+    setTasks((prev) => [...prev, newTask]);
   }, [currentList.id]);
 
   const toggleTask = useCallback((id: string) => {
-    setTasks((prev) => {
-      const next = prev.map((t) =>
-        t.id === id ? { ...t, completed: !t.completed } : t
-      );
-      saveStoredTasks(next);
-      return next;
-    });
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+    );
   }, []);
 
   const deleteTask = useCallback((id: string) => {
-    setTasks((prev) => {
-      const next = prev.filter((t) => t.id !== id);
-      saveStoredTasks(next);
-      return next;
-    });
+    setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   return (
     <TodoContext.Provider
       value={{
         tasks,
+        currentTasks,
         lists,
         currentList,
         setCurrentList,

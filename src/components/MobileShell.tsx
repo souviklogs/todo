@@ -9,12 +9,8 @@ interface MobileShellProps {
 }
 
 export const MobileShell: React.FC<MobileShellProps> = ({ children }) => {
-  const { currentList, tasks } = useTodoContext();
-
-  const filteredTasks = tasks.filter(
-    (t) => !t.listId || t.listId === currentList.id
-  );
-  const activeCount = filteredTasks.filter((t) => !t.completed).length;
+  const { currentList, currentTasks } = useTodoContext();
+  const activeCount = currentTasks.filter((t) => !t.completed).length;
 
   return (
     <div
@@ -53,7 +49,7 @@ export const MobileShell: React.FC<MobileShellProps> = ({ children }) => {
             </h1>
           </div>
           <p className="text-xs font-normal text-blue-100 tracking-wide">
-            {activeCount} active, {filteredTasks.length} total
+            {activeCount} active, {currentTasks.length} total
           </p>
         </div>
       </header>
