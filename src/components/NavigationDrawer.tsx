@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, ListTodo, User, Briefcase, Folder, Sun, Star, Plus, Pencil } from 'lucide-react';
-import { useTodoContext, DEFAULT_LIST, IMPORTANT_LIST } from '../context/TodoContext';
+import {
+  useTodoContext,
+  DEFAULT_LIST,
+  IMPORTANT_LIST,
+  MY_DAY_LIST,
+  getLocalDateString,
+} from '../context/TodoContext';
 import { ListModal } from './ListModal';
 import type { TodoList, CreateTodoListInput } from '../types/todo';
 
@@ -28,6 +34,8 @@ export const renderListIcon = (
     colorClass = customClassName;
   } else if (iconName === 'Star') {
     colorClass = isSelected ? 'text-rose-600 dark:text-rose-400' : 'text-rose-500 dark:text-rose-400';
+  } else if (iconName === 'Sun') {
+    colorClass = isSelected ? 'text-amber-500 dark:text-amber-400' : 'text-amber-500 dark:text-amber-400';
   } else if (isSelected) {
     colorClass = 'text-blue-600 dark:text-blue-400';
   } else {
@@ -61,6 +69,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
   const [targetList, setTargetList] = useState<TodoList | null>(null);
 
   const activeCountsByList = useMemo(() => {
+    const todayStr = getLocalDateString();
     const counts: Record<string, number> = {};
     for (const list of lists) {
       counts[list.id] = 0;
@@ -71,6 +80,10 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
         counts[taskListId] = (counts[taskListId] ?? 0) + 1;
       }
     }
+    // 'My Day' smart list aggregates all active tasks in My Day for today
+    counts[MY_DAY_LIST.id] = tasks.filter(
+      (t) => !t.completed && Boolean(t.inMyDay) && (!t.myDayDate || t.myDayDate >= todayStr)
+    ).length;
     // 'Important' smart list aggregates all active starred tasks across lists
     counts[IMPORTANT_LIST.id] = tasks.filter((t) => !t.completed && Boolean(t.isImportant)).length;
     return counts;
@@ -157,13 +170,16 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
           {lists.map((list) => {
             const activeCount = activeCountsByList[list.id] ?? 0;
             const isSelected = currentList.id === list.id;
+            const isMyDay = list.id === MY_DAY_LIST.id;
 
             return (
               <div
                 key={list.id}
                 className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl transition-colors group ${
                   isSelected
-                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold'
+                    ? isMyDay
+                      ? 'bg-gradient-to-r from-amber-50 to-blue-50 dark:from-amber-950/30 dark:to-blue-950/30 text-amber-700 dark:text-amber-300 font-semibold'
+                      : 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold'
                     : 'text-slate-700 dark:text-neutral-200 hover:bg-slate-100 dark:hover:bg-neutral-800 font-medium'
                 }`}
               >
@@ -201,7 +217,9 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
                     data-testid={`list-count-${list.id}`}
                     className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                       isSelected
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                        ? isMyDay
+                          ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200'
+                          : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
                         : 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 group-hover:bg-slate-200 dark:group-hover:bg-neutral-700'
                     }`}
                   >

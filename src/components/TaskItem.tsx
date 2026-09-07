@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Trash2, Star } from 'lucide-react';
+import { Check, Trash2, Star, Sun } from 'lucide-react';
 import type { Task } from '../types/todo';
 
 interface TaskItemProps {
@@ -7,6 +7,7 @@ interface TaskItemProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onToggleImportant?: (id: string) => void;
+  onToggleMyDay?: (id: string) => void;
 }
 
 export const TaskItem: React.FC<TaskItemProps> = ({
@@ -14,8 +15,10 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onToggle,
   onDelete,
   onToggleImportant,
+  onToggleMyDay,
 }) => {
   const isStarred = Boolean(task.isImportant);
+  const isInMyDay = Boolean(task.inMyDay);
 
   return (
     <li
@@ -48,6 +51,34 @@ export const TaskItem: React.FC<TaskItemProps> = ({
       </span>
 
       <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          type="button"
+          aria-label={
+            isInMyDay
+              ? `Remove "${task.title}" from My Day`
+              : `Add "${task.title}" to My Day`
+          }
+          aria-pressed={isInMyDay}
+          data-testid={`my-day-task-${task.id}`}
+          data-my-day={isInMyDay}
+          id={`toggle-my-day-${task.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleMyDay?.(task.id);
+          }}
+          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+            isInMyDay
+              ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+              : 'text-slate-300 hover:text-amber-500 hover:bg-slate-100 dark:text-neutral-500 dark:hover:text-amber-400 dark:hover:bg-neutral-700'
+          }`}
+        >
+          <Sun
+            className={`w-4 h-4 transition-transform active:scale-125 ${
+              isInMyDay ? 'text-amber-500 stroke-[2.5] dark:text-amber-400' : ''
+            }`}
+          />
+        </button>
+
         <button
           type="button"
           aria-label={
