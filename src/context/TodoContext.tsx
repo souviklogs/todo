@@ -316,11 +316,15 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
       }
     };
 
+    const handleFocus = () => {
+      checkMidnightRollover();
+    };
+
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
     if (typeof window !== 'undefined') {
-      window.addEventListener('focus', () => checkMidnightRollover());
+      window.addEventListener('focus', handleFocus);
     }
 
     return () => {
@@ -329,7 +333,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
       if (typeof window !== 'undefined') {
-        window.removeEventListener('focus', () => checkMidnightRollover());
+        window.removeEventListener('focus', handleFocus);
       }
     };
   }, [checkMidnightRollover]);
@@ -399,16 +403,20 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     [currentList.id]
   );
 
-  const toggleTask = useCallback((id: string) => {
-    const target = tasksRef.current.find((t) => t.id === id);
-    if (target && !target.completed) {
+  const triggerCompletionFeedback = useCallback((isCurrentlyCompleted?: boolean) => {
+    if (isCurrentlyCompleted === false) {
       triggerCompletionSensory({ soundEnabled: soundEnabledRef.current });
     }
+  }, []);
+
+  const toggleTask = useCallback((id: string) => {
+    const target = tasksRef.current.find((t) => t.id === id);
+    triggerCompletionFeedback(target?.completed);
 
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
-  }, []);
+  }, [triggerCompletionFeedback]);
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
@@ -458,9 +466,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   const toggleStep = useCallback((taskId: string, stepId: string) => {
     const targetTask = tasksRef.current.find((t) => t.id === taskId);
     const targetStep = targetTask?.steps?.find((s) => s.id === stepId);
-    if (targetStep && !targetStep.completed) {
-      triggerCompletionSensory({ soundEnabled: soundEnabledRef.current });
-    }
+    triggerCompletionFeedback(targetStep?.completed);
 
     setTasks((prev) =>
       prev.map((t) => {
@@ -473,7 +479,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         };
       })
     );
-  }, []);
+  }, [triggerCompletionFeedback]);
 
   const deleteStep = useCallback((taskId: string, stepId: string) => {
     setTasks((prev) =>

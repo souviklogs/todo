@@ -251,7 +251,6 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
           <div className="flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-800/50 transition-colors">
             <label
               htmlFor="sound-toggle-btn"
-              onClick={toggleSound}
               className="flex items-center gap-2.5 cursor-pointer select-none"
             >
               {soundEnabled ? (

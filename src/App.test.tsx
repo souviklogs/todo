@@ -2210,6 +2210,12 @@ describe('App Component Integration Tests', () => {
       expect(soundToggle).toBeInTheDocument();
       expect(soundToggle).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByText('Sound effects')).toBeInTheDocument();
+
+      // Verify clicking the label toggles the switch cleanly without double-triggering
+      fireEvent.click(screen.getByText('Sound effects'));
+      expect(soundToggle).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(screen.getByText('Sound effects'));
+      expect(soundToggle).toHaveAttribute('aria-checked', 'true');
     });
 
     it('toggling sound effects off mutes audio chime on task completion while maintaining haptic vibration', () => {

@@ -49,6 +49,34 @@ export function resetAudioContext(): void {
 }
 
 /**
+ * Schedules a single sine tone on the AudioContext with an exponential decay envelope.
+ */
+function playTone(
+  ctx: AudioContext,
+  frequency: number,
+  startTime: number,
+  duration: number,
+  peakGain: number
+): void {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  if (osc.frequency?.setValueAtTime) {
+    osc.frequency.setValueAtTime(frequency, startTime);
+  }
+  if (gain.gain?.setValueAtTime) {
+    gain.gain.setValueAtTime(peakGain, startTime);
+  }
+  if (gain.gain?.exponentialRampToValueAtTime) {
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  }
+  osc.connect?.(gain);
+  gain.connect?.(ctx.destination);
+  osc.start?.(startTime);
+  osc.stop?.(startTime + duration);
+}
+
+/**
  * Synthesizes a signature two-tone Microsoft To Do-style completion chime
  * (root to octave chime with sine oscillator and exponential gain decay)
  * using the Web Audio API AudioContext without external audio files.
@@ -67,41 +95,10 @@ export function playCompletionChime(customAudioContext?: AudioContext | null): v
     const now = ctx.currentTime || 0;
 
     // Tone 1: Root chime (D5)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    if (osc1.frequency?.setValueAtTime) {
-      osc1.frequency.setValueAtTime(ROOT_CHIME_FREQUENCY, now);
-    }
-    if (gain1.gain?.setValueAtTime) {
-      gain1.gain.setValueAtTime(0.2, now);
-    }
-    if (gain1.gain?.exponentialRampToValueAtTime) {
-      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
-    }
-    osc1.connect?.(gain1);
-    gain1.connect?.(ctx.destination);
-    osc1.start?.(now);
-    osc1.stop?.(now + 0.25);
+    playTone(ctx, ROOT_CHIME_FREQUENCY, now, 0.25, 0.2);
 
     // Tone 2: Octave chime (D6) - delayed cheerful octave ring
-    const tone2Start = now + 0.1;
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    if (osc2.frequency?.setValueAtTime) {
-      osc2.frequency.setValueAtTime(OCTAVE_CHIME_FREQUENCY, tone2Start);
-    }
-    if (gain2.gain?.setValueAtTime) {
-      gain2.gain.setValueAtTime(0.25, tone2Start);
-    }
-    if (gain2.gain?.exponentialRampToValueAtTime) {
-      gain2.gain.exponentialRampToValueAtTime(0.0001, tone2Start + 0.35);
-    }
-    osc2.connect?.(gain2);
-    gain2.connect?.(ctx.destination);
-    osc2.start?.(tone2Start);
-    osc2.stop?.(tone2Start + 0.35);
+    playTone(ctx, OCTAVE_CHIME_FREQUENCY, now + 0.1, 0.35, 0.25);
   } catch (err) {
     console.warn('Unable to play completion chime:', err);
   }
