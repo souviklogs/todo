@@ -30,8 +30,22 @@ export function getLocalDateString(dateInput?: Date | string | number): string {
 }
 
 export function getTomorrowDateString(todayInput?: Date | string | number): string {
+  if (typeof todayInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(todayInput)) {
+    const [y, m, d] = todayInput.split('-').map(Number);
+    return getLocalDateString(new Date(y, m - 1, d + 1));
+  }
   const date = todayInput ? new Date(todayInput) : new Date();
   date.setDate(date.getDate() + 1);
+  return getLocalDateString(date);
+}
+
+export function getYesterdayDateString(todayInput?: Date | string | number): string {
+  if (typeof todayInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(todayInput)) {
+    const [y, m, d] = todayInput.split('-').map(Number);
+    return getLocalDateString(new Date(y, m - 1, d - 1));
+  }
+  const date = todayInput ? new Date(todayInput) : new Date();
+  date.setDate(date.getDate() - 1);
   return getLocalDateString(date);
 }
 
@@ -48,18 +62,14 @@ export function formatDueDateBadge(
   const currentToday = todayStr ?? getLocalDateString();
   const isOverdue = dueDate < currentToday;
 
-  const [y, m, d] = currentToday.split('-').map(Number);
-  const tomorrowDate = new Date(y, m - 1, d + 1);
-  const tomorrowStr = getLocalDateString(tomorrowDate);
-
-  const yesterdayDate = new Date(y, m - 1, d - 1);
-  const yesterdayStr = getLocalDateString(yesterdayDate);
+  const tomorrowStr = getTomorrowDateString(currentToday);
+  const yesterdayStr = getYesterdayDateString(currentToday);
 
   const [dueY, dueM, dueD] = dueDate.split('-').map(Number);
   const dueObj = new Date(dueY, dueM - 1, dueD);
   const monthName = dueObj.toLocaleDateString('en-US', { month: 'short' });
-  const currentYear = new Date(y, m - 1, d).getFullYear();
-  const shortDate = dueY === currentYear ? `${monthName} ${dueD}` : `${monthName} ${dueD}, ${dueY}`;
+  const [currentY] = currentToday.split('-').map(Number);
+  const shortDate = dueY === currentY ? `${monthName} ${dueD}` : `${monthName} ${dueD}, ${dueY}`;
 
   if (dueDate === currentToday) {
     return { label: 'Due Today', isOverdue: false };

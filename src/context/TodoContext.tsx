@@ -12,17 +12,11 @@ import type {
   TodoList,
   CreateTodoListInput,
   UpdateTodoListInput,
-  DueDateInfo,
 } from '../types/todo';
-import {
-  getLocalDateString,
-  getTomorrowDateString,
-  formatDueDateBadge,
-} from '../types/todo';
+import { getLocalDateString } from '../types/todo';
 import { DEFAULT_THEME_ID } from '../constants/theme';
 
-export { getLocalDateString, getTomorrowDateString, formatDueDateBadge };
-export type { DueDateInfo };
+export { getLocalDateString };
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
@@ -231,7 +225,6 @@ interface TodoContextType {
   deleteStep: (taskId: string, stepId: string) => void;
   setTaskNotes: (taskId: string, notes: string) => void;
   setTaskDueDate: (taskId: string, dueDate: string | null) => void;
-  updateTask: (taskId: string, updates: Partial<Task>) => void;
   checkMidnightRollover: (customCurrentDate?: string | Date) => boolean;
   addList: (data: CreateTodoListInput) => TodoList;
   updateList: (id: string, updates: UpdateTodoListInput) => void;
@@ -459,12 +452,6 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     );
   }, []);
 
-  const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
-    );
-  }, []);
-
   const addList = useCallback(
     (data: CreateTodoListInput): TodoList => {
       const trimmed = data.name.trim();
@@ -532,7 +519,6 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         deleteStep,
         setTaskNotes,
         setTaskDueDate,
-        updateTask,
         checkMidnightRollover,
         addList,
         updateList,

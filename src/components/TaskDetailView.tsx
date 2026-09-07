@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Check, Plus, Trash2, Sun, Calendar, FileText } from 'lucide-react';
 import type { Task } from '../types/todo';
 import {
@@ -28,6 +28,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
   } = useTodoContext();
   const [newStepTitle, setNewStepTitle] = useState('');
   const [notes, setNotes] = useState(task?.notes ?? '');
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setNotes(task?.notes ?? '');
@@ -359,10 +360,9 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
               data-testid="due-date-shortcut-custom"
               aria-label="Pick Date (Custom Date)"
               onClick={() => {
-                const input = document.getElementById('detail-due-date-input') as HTMLInputElement | null;
-                input?.focus();
+                dateInputRef.current?.focus();
                 try {
-                  (input as any)?.showPicker?.();
+                  dateInputRef.current?.showPicker?.();
                 } catch {}
               }}
               className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer text-center ${
@@ -384,6 +384,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
               Pick Date / Custom Date
             </label>
             <input
+              ref={dateInputRef}
               id="detail-due-date-input"
               type="date"
               aria-label="Custom Date"
