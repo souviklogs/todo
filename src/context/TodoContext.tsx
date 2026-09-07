@@ -12,6 +12,24 @@ export const DEFAULT_LIST: TodoList = {
   isSystem: true,
 };
 
+export const DEFAULT_LISTS: TodoList[] = [
+  DEFAULT_LIST,
+  {
+    id: 'personal',
+    name: 'Personal',
+    icon: 'User',
+    colorTheme: 'purple',
+    isSystem: false,
+  },
+  {
+    id: 'work',
+    name: 'Work',
+    icon: 'Briefcase',
+    colorTheme: 'emerald',
+    isSystem: false,
+  },
+];
+
 export const DEFAULT_TASKS: Task[] = [
   {
     id: 'task-1',
@@ -40,29 +58,75 @@ export const DEFAULT_TASKS: Task[] = [
     listId: 'tasks',
     createdAt: '2026-09-07T08:02:00.000Z',
   },
+  {
+    id: 'task-4',
+    title: 'Plan weekend trip',
+    completed: false,
+    isImportant: false,
+    steps: [],
+    listId: 'personal',
+    createdAt: '2026-09-07T08:03:00.000Z',
+  },
+  {
+    id: 'task-5',
+    title: 'Quarterly review presentation',
+    completed: false,
+    isImportant: true,
+    steps: [],
+    listId: 'work',
+    createdAt: '2026-09-07T08:04:00.000Z',
+  },
 ];
 
-export function loadStoredTasks(): Task[] {
-  if (typeof window === 'undefined') return DEFAULT_TASKS;
+function loadFromStorage<T>(
+  key: string,
+  fallback: T,
+  validator?: (data: unknown) => boolean
+): T {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_TASKS);
+    const raw = localStorage.getItem(key);
     if (raw === null) {
-      return DEFAULT_TASKS;
+      return fallback;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (validator && !validator(parsed)) {
+      return fallback;
+    }
+    return parsed;
   } catch (err) {
-    console.error('Failed to parse stored tasks:', err);
-    return DEFAULT_TASKS;
+    console.error(`Failed to parse stored ${key}:`, err);
+    return fallback;
   }
 }
 
-export function saveStoredTasks(tasks: Task[]): void {
+function saveToStorage<T>(key: string, data: T): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(tasks));
+    localStorage.setItem(key, JSON.stringify(data));
   } catch (err) {
-    console.error('Failed to save tasks to localStorage:', err);
+    console.error(`Failed to save ${key} to localStorage:`, err);
   }
+}
+
+export function loadStoredTasks(): Task[] {
+  return loadFromStorage(STORAGE_KEY_TASKS, DEFAULT_TASKS, (data) => Array.isArray(data));
+}
+
+export function saveStoredTasks(tasks: Task[]): void {
+  saveToStorage(STORAGE_KEY_TASKS, tasks);
+}
+
+export function loadStoredLists(): TodoList[] {
+  return loadFromStorage(
+    STORAGE_KEY_LISTS,
+    DEFAULT_LISTS,
+    (data) => Array.isArray(data) && data.length > 0
+  );
+}
+
+export function saveStoredLists(lists: TodoList[]): void {
+  saveToStorage(STORAGE_KEY_LISTS, lists);
 }
 
 interface TodoContextType {
@@ -81,23 +145,42 @@ const TodoContext = createContext<TodoContextType | undefined>(undefined);
 interface TodoProviderProps {
   children: React.ReactNode;
   initialTasks?: Task[];
+  initialLists?: TodoList[];
+  initialCurrentList?: TodoList;
 }
 
-export const TodoProvider: React.FC<TodoProviderProps> = ({ children, initialTasks }) => {
+export const TodoProvider: React.FC<TodoProviderProps> = ({
+  children,
+  initialTasks,
+  initialLists,
+  initialCurrentList,
+}) => {
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (initialTasks) return initialTasks;
     return loadStoredTasks();
   });
-  const [lists] = useState<TodoList[]>([DEFAULT_LIST]);
-  const [currentList, setCurrentList] = useState<TodoList>(DEFAULT_LIST);
+  const [lists] = useState<TodoList[]>(() => {
+    if (initialLists) return initialLists;
+    return loadStoredLists();
+  });
+  const [currentList, setCurrentList] = useState<TodoList>(() => {
+    if (initialCurrentList) return initialCurrentList;
+    const loaded = initialLists ?? loadStoredLists();
+    return loaded[0] ?? DEFAULT_LIST;
+  });
 
   // Synchronize tasks to localStorage whenever tasks change
   useEffect(() => {
     saveStoredTasks(tasks);
   }, [tasks]);
 
+  // Synchronize lists to localStorage whenever lists change
+  useEffect(() => {
+    saveStoredLists(lists);
+  }, [lists]);
+
   const currentTasks = useMemo(
-    () => tasks.filter((t) => !t.listId || t.listId === currentList.id),
+    () => tasks.filter((t) => (t.listId ?? DEFAULT_LIST.id) === currentList.id),
     [tasks, currentList.id]
   );
 
