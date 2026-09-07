@@ -25,3 +25,11 @@ export interface TodoList {
   colorTheme: string;
   isSystem: boolean;
 }
+
+export interface CreateTodoListInput {
+  name: string;
+  icon?: string;
+  colorTheme?: string;
+}
+
+export type UpdateTodoListInput = Partial<CreateTodoListInput>;

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import type { Task, TodoList } from '../types/todo';
+import type { Task, TodoList, CreateTodoListInput, UpdateTodoListInput } from '../types/todo';
+import { DEFAULT_THEME_ID } from '../constants/theme';
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
@@ -8,7 +9,7 @@ export const DEFAULT_LIST: TodoList = {
   id: 'tasks',
   name: 'Tasks',
   icon: 'ListTodo',
-  colorTheme: 'blue',
+  colorTheme: DEFAULT_THEME_ID,
   isSystem: true,
 };
 
@@ -138,6 +139,9 @@ interface TodoContextType {
   addTask: (title: string, listId?: string) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
+  addList: (data: CreateTodoListInput) => TodoList;
+  updateList: (id: string, updates: UpdateTodoListInput) => void;
+  deleteList: (id: string) => void;
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -159,7 +163,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     if (initialTasks) return initialTasks;
     return loadStoredTasks();
   });
-  const [lists] = useState<TodoList[]>(() => {
+  const [lists, setLists] = useState<TodoList[]>(() => {
     if (initialLists) return initialLists;
     return loadStoredLists();
   });
@@ -211,6 +215,47 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const addList = useCallback(
+    (data: CreateTodoListInput): TodoList => {
+      const trimmed = data.name.trim();
+      const newList: TodoList = {
+        id: `list-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        name: trimmed || 'Untitled list',
+        icon: data.icon || '📋',
+        colorTheme: data.colorTheme || DEFAULT_THEME_ID,
+        isSystem: false,
+      };
+      setLists((prev) => [...prev, newList]);
+      return newList;
+    },
+    []
+  );
+
+  const updateList = useCallback(
+    (id: string, updates: UpdateTodoListInput) => {
+      setLists((prev) =>
+        prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
+      );
+      setCurrentList((prev) => (prev.id === id ? { ...prev, ...updates } : prev));
+    },
+    []
+  );
+
+  const deleteList = useCallback((id: string) => {
+    setLists((prev) => {
+      const target = prev.find((l) => l.id === id);
+      if (target?.isSystem) return prev;
+      return prev.filter((l) => l.id !== id);
+    });
+    setTasks((prev) => prev.filter((t) => t.listId !== id));
+    setCurrentList((prev) => {
+      if (prev.id === id) {
+        return DEFAULT_LIST;
+      }
+      return prev;
+    });
+  }, []);
+
   return (
     <TodoContext.Provider
       value={{
@@ -222,6 +267,9 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         addTask,
         toggleTask,
         deleteTask,
+        addList,
+        updateList,
+        deleteList,
       }}
     >
       {children}
