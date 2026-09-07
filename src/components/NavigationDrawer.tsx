@@ -18,12 +18,20 @@ const LUCIDE_ICONS: Record<string, React.FC<{ className?: string }>> = {
   Folder,
 };
 
-export const renderListIcon = (iconName: string, isSelected: boolean = false) => {
-  const iconClass = `w-5 h-5 flex-shrink-0 ${
-    isSelected
-      ? 'text-blue-600 dark:text-blue-400'
-      : 'text-slate-500 dark:text-neutral-400 group-hover:text-slate-700 dark:group-hover:text-neutral-200'
-  }`;
+export const renderListIcon = (
+  iconName: string,
+  isSelected: boolean = false,
+  customClassName?: string
+) => {
+  const defaultClass = isSelected
+    ? iconName === 'Star'
+      ? 'text-rose-600 dark:text-rose-400'
+      : 'text-blue-600 dark:text-blue-400'
+    : iconName === 'Star'
+    ? 'text-rose-500 dark:text-rose-400'
+    : 'text-slate-500 dark:text-neutral-400 group-hover:text-slate-700 dark:group-hover:text-neutral-200';
+
+  const iconClass = `w-5 h-5 flex-shrink-0 ${customClassName ?? defaultClass}`;
 
   const IconComp = LUCIDE_ICONS[iconName];
   if (IconComp) {
@@ -60,6 +68,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
         counts[taskListId] = (counts[taskListId] ?? 0) + 1;
       }
     }
+    // 'Important' smart list aggregates all active starred tasks across lists
+    counts['important'] = tasks.filter((t) => !t.completed && Boolean(t.isImportant)).length;
     return counts;
   }, [tasks, lists]);
 

@@ -1,14 +1,22 @@
 import React from 'react';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, Trash2, Star } from 'lucide-react';
 import type { Task } from '../types/todo';
 
 interface TaskItemProps {
   task: Task;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onToggleImportant?: (id: string) => void;
 }
 
-export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete }) => {
+export const TaskItem: React.FC<TaskItemProps> = ({
+  task,
+  onToggle,
+  onDelete,
+  onToggleImportant,
+}) => {
+  const isStarred = Boolean(task.isImportant);
+
   return (
     <li
       data-testid={`task-item-${task.id}`}
@@ -39,15 +47,49 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task, onToggle, onDelete }) 
         {task.title}
       </span>
 
-      <button
-        type="button"
-        aria-label={`Delete task "${task.title}"`}
-        data-testid={`delete-task-${task.id}`}
-        onClick={() => onDelete(task.id)}
-        className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          type="button"
+          aria-label={
+            isStarred
+              ? `Unstar task "${task.title}" (Important)`
+              : `Star task "${task.title}" (Mark as important)`
+          }
+          aria-pressed={isStarred}
+          data-testid={`star-task-${task.id}`}
+          data-starred={isStarred}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleImportant?.(task.id);
+          }}
+          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+            isStarred
+              ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+              : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100 dark:text-neutral-500 dark:hover:text-neutral-300 dark:hover:bg-neutral-700'
+          }`}
+        >
+          <Star
+            className={`w-4 h-4 transition-transform active:scale-125 ${
+              isStarred
+                ? 'fill-amber-400 text-amber-500 dark:fill-amber-400 dark:text-amber-400'
+                : 'fill-none'
+            }`}
+          />
+        </button>
+
+        <button
+          type="button"
+          aria-label={`Delete task "${task.title}"`}
+          data-testid={`delete-task-${task.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(task.id);
+          }}
+          className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
     </li>
   );
 };

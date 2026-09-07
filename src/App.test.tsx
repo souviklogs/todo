@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
 
@@ -610,6 +610,201 @@ describe('App Component Integration Tests', () => {
       // Open drawer and verify Travel is still there
       fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
       expect(screen.getByTestId('navigation-drawer')).toHaveTextContent('Travel');
+    });
+  });
+
+  describe('Important Starred Smart List (Issue #6)', () => {
+    beforeEach(() => {
+      window.innerWidth = 375;
+      localStorage.clear();
+    });
+
+    it('every task card displays an interactive star icon button with active/inactive state', () => {
+      render(<App />);
+
+      // Task 1 is preloaded as important/starred
+      const starBtn1 = screen.getByTestId('star-task-task-1');
+      expect(starBtn1).toBeInTheDocument();
+      expect(starBtn1).toHaveAttribute('data-starred', 'true');
+      expect(starBtn1).toHaveAttribute('aria-pressed', 'true');
+
+      // Task 2 is preloaded as unstarred
+      const starBtn2 = screen.getByTestId('star-task-task-2');
+      expect(starBtn2).toBeInTheDocument();
+      expect(starBtn2).toHaveAttribute('data-starred', 'false');
+      expect(starBtn2).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('tapping the star toggles task importance with visual active/inactive state', () => {
+      render(<App />);
+
+      const starBtn2 = screen.getByTestId('star-task-task-2');
+      expect(starBtn2).toHaveAttribute('data-starred', 'false');
+
+      // Click to star task-2
+      fireEvent.click(starBtn2);
+      expect(starBtn2).toHaveAttribute('data-starred', 'true');
+      expect(starBtn2).toHaveAttribute('aria-pressed', 'true');
+
+      // Click again to unstar
+      fireEvent.click(starBtn2);
+      expect(starBtn2).toHaveAttribute('data-starred', 'false');
+      expect(starBtn2).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('shows Important smart list in navigation drawer with real-time count of starred tasks', () => {
+      render(<App />);
+
+      // Initially, task-1 and task-5 are active & starred -> count is 2
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-item-important')).toBeInTheDocument();
+      expect(screen.getByTestId('list-count-important')).toHaveTextContent('2');
+
+      // Close drawer
+      fireEvent.click(screen.getByRole('button', { name: /close navigation drawer/i }));
+
+      // Star task-2 in Tasks
+      fireEvent.click(screen.getByTestId('star-task-task-2'));
+
+      // Reopen drawer -> Important count should now be 3
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-important')).toHaveTextContent('3');
+
+      // Close drawer and complete a starred task (task-1)
+      fireEvent.click(screen.getByRole('button', { name: /close navigation drawer/i }));
+      const checkbox1 = screen.getByRole('checkbox', { name: 'Welcome to Tasks!' });
+      fireEvent.click(checkbox1);
+
+      // Reopen drawer -> active Important count should decrement to 2
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-important')).toHaveTextContent('2');
+    });
+
+    it('opening Important shows all starred tasks regardless of parent list', () => {
+      render(<App />);
+
+      // Open drawer and switch to 'Important'
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-important'));
+
+      // Header should display 'Important' with warm/rose theme
+      const header = screen.getByTestId('mobile-shell-header');
+      expect(header).toHaveTextContent('Important');
+      expect(header).toHaveAttribute('data-theme', 'rose');
+
+      // Should display starred task from 'tasks' list
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+      // Should display starred task from 'work' list
+      expect(screen.getByText('Quarterly review presentation')).toBeInTheDocument();
+
+      // Non-starred tasks should NOT be in Important
+      expect(screen.queryByText('Try adding a new task below')).not.toBeInTheDocument();
+      expect(screen.queryByText('Plan weekend trip')).not.toBeInTheDocument();
+    });
+
+    it('unstarring an item inside Important updates both Important and the items original list', () => {
+      render(<App />);
+
+      // Open Important list
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-important'));
+
+      // Both starred tasks are visible
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+      expect(screen.getByText('Quarterly review presentation')).toBeInTheDocument();
+
+      // Unstar 'Quarterly review presentation' (which belongs to 'work' list)
+      const starBtnWorkTask = screen.getByTestId('star-task-task-5');
+      fireEvent.click(starBtnWorkTask);
+
+      // Task is immediately removed from Important list view
+      expect(screen.queryByText('Quarterly review presentation')).not.toBeInTheDocument();
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+
+      // Verify drawer count for Important decreased to 1
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-important')).toHaveTextContent('1');
+
+      // Switch to Work list
+      fireEvent.click(screen.getByTestId('list-item-work'));
+
+      // Task is still present in its original list, but its star is now unstarred
+      expect(screen.getByText('Quarterly review presentation')).toBeInTheDocument();
+      const workTaskStar = screen.getByTestId('star-task-task-5');
+      expect(workTaskStar).toHaveAttribute('data-starred', 'false');
+
+      // Re-star it in Work list
+      fireEvent.click(workTaskStar);
+      expect(workTaskStar).toHaveAttribute('data-starred', 'true');
+
+      // Switch back to Important -> task reappears
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-important')).toHaveTextContent('2');
+      fireEvent.click(screen.getByTestId('list-item-important'));
+      expect(screen.getByText('Quarterly review presentation')).toBeInTheDocument();
+    });
+
+    it('allows adding a task directly from Important list and marks it important', () => {
+      render(<App />);
+
+      // Switch to Important
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-important'));
+
+      // Quick-add a new task
+      const input = screen.getByPlaceholderText('Add a task');
+      fireEvent.change(input, { target: { value: 'Submit tax return' } });
+      fireEvent.submit(input.closest('form')!);
+
+      // Newly added task appears in Important list and is starred
+      expect(screen.getByText('Submit tax return')).toBeInTheDocument();
+      const newTaskItem = screen.getByText('Submit tax return').closest('li')!;
+      const starBtn = within(newTaskItem).getByRole('button', { name: /star/i });
+      expect(starBtn).toHaveAttribute('data-starred', 'true');
+
+      // Open drawer and check Tasks list has the newly created task
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-tasks'));
+      expect(screen.getByText('Submit tax return')).toBeInTheDocument();
+    });
+
+    it('disables more options menu and omits edit button for system Important list', () => {
+      render(<App />);
+
+      // Switch to Important
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-important'));
+
+      // Header options button should be disabled for Important system list
+      expect(screen.getByTestId('list-options-btn')).toBeDisabled();
+
+      // In drawer, Important does not have an edit button
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.queryByTestId('edit-list-important')).not.toBeInTheDocument();
+    });
+
+    it('persists starred task status across simulated page reload in localStorage', () => {
+      const { unmount } = render(<App />);
+
+      // Star 'Try adding a new task below'
+      const starBtn = screen.getByTestId('star-task-task-2');
+      fireEvent.click(starBtn);
+      expect(starBtn).toHaveAttribute('data-starred', 'true');
+
+      // Simulate refresh
+      unmount();
+      render(<App />);
+
+      // Verify task-2 remains starred
+      expect(screen.getByTestId('star-task-task-2')).toHaveAttribute('data-starred', 'true');
+
+      // Open drawer and check Important count is 3
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-important')).toHaveTextContent('3');
+
+      // Open Important and verify task-2 is listed
+      fireEvent.click(screen.getByTestId('list-item-important'));
+      expect(screen.getByText('Try adding a new task below')).toBeInTheDocument();
     });
   });
 });

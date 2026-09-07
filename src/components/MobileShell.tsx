@@ -109,12 +109,12 @@ export const MobileShell: React.FC<MobileShellProps> = ({ children }) => {
           <div className="flex items-center space-x-2">
             <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
               <span className="text-white flex items-center justify-center">
-                {renderListIcon(currentList.icon, false)}
+                {renderListIcon(currentList.icon, false, 'text-white')}
               </span>
               {currentList.name}
             </h1>
           </div>
-          <p className="text-xs font-normal text-blue-100 tracking-wide">
+          <p className="text-xs font-normal text-white/80 tracking-wide">
             {activeCount} active, {currentTasks.length} total
           </p>
         </div>
