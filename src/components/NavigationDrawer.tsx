@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, ListTodo, User, Briefcase, Folder, Sun, Star, Plus, Pencil } from 'lucide-react';
-import { useTodoContext, DEFAULT_LIST } from '../context/TodoContext';
+import { useTodoContext, DEFAULT_LIST, IMPORTANT_LIST } from '../context/TodoContext';
 import { ListModal } from './ListModal';
 import type { TodoList, CreateTodoListInput } from '../types/todo';
 
@@ -18,12 +18,23 @@ const LUCIDE_ICONS: Record<string, React.FC<{ className?: string }>> = {
   Folder,
 };
 
-export const renderListIcon = (iconName: string, isSelected: boolean = false) => {
-  const iconClass = `w-5 h-5 flex-shrink-0 ${
-    isSelected
-      ? 'text-blue-600 dark:text-blue-400'
-      : 'text-slate-500 dark:text-neutral-400 group-hover:text-slate-700 dark:group-hover:text-neutral-200'
-  }`;
+export const renderListIcon = (
+  iconName: string,
+  isSelected: boolean = false,
+  customClassName?: string
+) => {
+  let colorClass: string;
+  if (customClassName) {
+    colorClass = customClassName;
+  } else if (iconName === 'Star') {
+    colorClass = isSelected ? 'text-rose-600 dark:text-rose-400' : 'text-rose-500 dark:text-rose-400';
+  } else if (isSelected) {
+    colorClass = 'text-blue-600 dark:text-blue-400';
+  } else {
+    colorClass = 'text-slate-500 dark:text-neutral-400 group-hover:text-slate-700 dark:group-hover:text-neutral-200';
+  }
+
+  const iconClass = `w-5 h-5 flex-shrink-0 ${colorClass}`;
 
   const IconComp = LUCIDE_ICONS[iconName];
   if (IconComp) {
@@ -60,6 +71,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
         counts[taskListId] = (counts[taskListId] ?? 0) + 1;
       }
     }
+    // 'Important' smart list aggregates all active starred tasks across lists
+    counts[IMPORTANT_LIST.id] = tasks.filter((t) => !t.completed && Boolean(t.isImportant)).length;
     return counts;
   }, [tasks, lists]);
 

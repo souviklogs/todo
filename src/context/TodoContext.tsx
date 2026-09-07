@@ -13,8 +13,17 @@ export const DEFAULT_LIST: TodoList = {
   isSystem: true,
 };
 
+export const IMPORTANT_LIST: TodoList = {
+  id: 'important',
+  name: 'Important',
+  icon: 'Star',
+  colorTheme: 'rose',
+  isSystem: true,
+};
+
 export const DEFAULT_LISTS: TodoList[] = [
   DEFAULT_LIST,
+  IMPORTANT_LIST,
   {
     id: 'personal',
     name: 'Personal',
@@ -119,11 +128,20 @@ export function saveStoredTasks(tasks: Task[]): void {
 }
 
 export function loadStoredLists(): TodoList[] {
-  return loadFromStorage(
+  const loaded = loadFromStorage(
     STORAGE_KEY_LISTS,
     DEFAULT_LISTS,
     (data) => Array.isArray(data) && data.length > 0
   );
+  if (!loaded.some((l) => l.id === IMPORTANT_LIST.id)) {
+    const tasksIdx = loaded.findIndex((l) => l.id === DEFAULT_LIST.id);
+    if (tasksIdx !== -1) {
+      loaded.splice(tasksIdx + 1, 0, IMPORTANT_LIST);
+    } else {
+      loaded.unshift(IMPORTANT_LIST);
+    }
+  }
+  return loaded;
 }
 
 export function saveStoredLists(lists: TodoList[]): void {
@@ -139,6 +157,7 @@ interface TodoContextType {
   addTask: (title: string, listId?: string) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
+  toggleImportant: (id: string) => void;
   addList: (data: CreateTodoListInput) => TodoList;
   updateList: (id: string, updates: UpdateTodoListInput) => void;
   deleteList: (id: string) => void;
@@ -183,22 +202,27 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     saveStoredLists(lists);
   }, [lists]);
 
-  const currentTasks = useMemo(
-    () => tasks.filter((t) => (t.listId ?? DEFAULT_LIST.id) === currentList.id),
-    [tasks, currentList.id]
-  );
+  const currentTasks = useMemo(() => {
+    if (currentList.id === IMPORTANT_LIST.id) {
+      return tasks.filter((t) => Boolean(t.isImportant));
+    }
+    return tasks.filter((t) => (t.listId ?? DEFAULT_LIST.id) === currentList.id);
+  }, [tasks, currentList.id]);
 
   const addTask = useCallback((title: string, listId?: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
+    const isImportantView = currentList.id === IMPORTANT_LIST.id;
+    const targetListId = listId ?? (isImportantView ? DEFAULT_LIST.id : currentList.id);
+
     const newTask: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title: trimmed,
       completed: false,
-      isImportant: false,
+      isImportant: isImportantView,
       steps: [],
-      listId: listId ?? currentList.id,
+      listId: targetListId,
       createdAt: new Date().toISOString(),
     };
 
@@ -213,6 +237,12 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const toggleImportant = useCallback((id: string) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isImportant: !t.isImportant } : t))
+    );
   }, []);
 
   const addList = useCallback(
@@ -267,6 +297,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         addTask,
         toggleTask,
         deleteTask,
+        toggleImportant,
         addList,
         updateList,
         deleteList,
