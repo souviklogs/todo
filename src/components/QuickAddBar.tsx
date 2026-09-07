@@ -3,11 +3,65 @@ import { Plus, Calendar, CalendarDays, Star, Sun } from 'lucide-react';
 import { useTodoContext } from '../context/TodoContext';
 import { getLocalDateString, getTomorrowDateString } from '../types/todo';
 
+interface ShortcutChipProps {
+  testId: string;
+  label: string;
+  ariaLabel: string;
+  isActive: boolean;
+  activeColor: 'blue' | 'amber';
+  icon: React.ReactNode;
+  onClick: () => void;
+}
+
+const ShortcutChip: React.FC<ShortcutChipProps> = ({
+  testId,
+  label,
+  ariaLabel,
+  isActive,
+  activeColor,
+  icon,
+  onClick,
+}) => {
+  const activeClass =
+    activeColor === 'blue'
+      ? 'bg-blue-100 text-blue-700 border-blue-400 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-600 font-semibold'
+      : 'bg-amber-100 text-amber-700 border-amber-400 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-600 font-semibold';
+
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-label={ariaLabel}
+      aria-pressed={isActive}
+      data-active={isActive}
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border flex-shrink-0 ${
+        isActive
+          ? activeClass
+          : 'bg-slate-100 text-slate-600 border-slate-200/80 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700/80 dark:hover:bg-neutral-700'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+};
+
+interface QuickAddAttributes {
+  dueDate: 'today' | 'tomorrow' | null;
+  isStarred: boolean;
+  isMyDay: boolean;
+}
+
+const INITIAL_ATTRIBUTES: QuickAddAttributes = {
+  dueDate: null,
+  isStarred: false,
+  isMyDay: false,
+};
+
 export const QuickAddBar: React.FC = () => {
   const [title, setTitle] = useState('');
-  const [selectedDueDate, setSelectedDueDate] = useState<'today' | 'tomorrow' | null>(null);
-  const [isStarred, setIsStarred] = useState(false);
-  const [isMyDay, setIsMyDay] = useState(false);
+  const [attributes, setAttributes] = useState<QuickAddAttributes>(INITIAL_ATTRIBUTES);
   const { addTask, selectedTask } = useTodoContext();
 
   if (selectedTask) {
@@ -15,19 +69,25 @@ export const QuickAddBar: React.FC = () => {
   }
 
   const handleToggleDueToday = () => {
-    setSelectedDueDate((prev) => (prev === 'today' ? null : 'today'));
+    setAttributes((prev) => ({
+      ...prev,
+      dueDate: prev.dueDate === 'today' ? null : 'today',
+    }));
   };
 
   const handleToggleDueTomorrow = () => {
-    setSelectedDueDate((prev) => (prev === 'tomorrow' ? null : 'tomorrow'));
+    setAttributes((prev) => ({
+      ...prev,
+      dueDate: prev.dueDate === 'tomorrow' ? null : 'tomorrow',
+    }));
   };
 
   const handleToggleStar = () => {
-    setIsStarred((prev) => !prev);
+    setAttributes((prev) => ({ ...prev, isStarred: !prev.isStarred }));
   };
 
   const handleToggleMyDay = () => {
-    setIsMyDay((prev) => !prev);
+    setAttributes((prev) => ({ ...prev, isMyDay: !prev.isMyDay }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -36,22 +96,20 @@ export const QuickAddBar: React.FC = () => {
     if (!trimmed) return;
 
     let dueDate: string | null = null;
-    if (selectedDueDate === 'today') {
+    if (attributes.dueDate === 'today') {
       dueDate = getLocalDateString();
-    } else if (selectedDueDate === 'tomorrow') {
+    } else if (attributes.dueDate === 'tomorrow') {
       dueDate = getTomorrowDateString();
     }
 
     addTask(trimmed, {
-      isImportant: isStarred ? true : undefined,
-      inMyDay: isMyDay ? true : undefined,
+      isImportant: attributes.isStarred ? true : undefined,
+      inMyDay: attributes.isMyDay ? true : undefined,
       dueDate,
     });
 
     setTitle('');
-    setSelectedDueDate(null);
-    setIsStarred(false);
-    setIsMyDay(false);
+    setAttributes(INITIAL_ATTRIBUTES);
   };
 
   return (
@@ -66,88 +124,64 @@ export const QuickAddBar: React.FC = () => {
           className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs"
         >
           {/* Due Today Chip */}
-          <button
-            type="button"
-            data-testid="chip-due-today"
-            aria-label="Due Today"
-            aria-pressed={selectedDueDate === 'today'}
-            data-active={selectedDueDate === 'today'}
+          <ShortcutChip
+            testId="chip-due-today"
+            label="Today"
+            ariaLabel="Due Today"
+            isActive={attributes.dueDate === 'today'}
+            activeColor="blue"
+            icon={<Calendar className="w-3.5 h-3.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />}
             onClick={handleToggleDueToday}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border flex-shrink-0 ${
-              selectedDueDate === 'today'
-                ? 'bg-blue-100 text-blue-700 border-blue-400 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-600 font-semibold'
-                : 'bg-slate-100 text-slate-600 border-slate-200/80 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700/80 dark:hover:bg-neutral-700'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-            <span>Today</span>
-          </button>
+          />
 
           {/* Due Tomorrow Chip */}
-          <button
-            type="button"
-            data-testid="chip-due-tomorrow"
-            aria-label="Due Tomorrow"
-            aria-pressed={selectedDueDate === 'tomorrow'}
-            data-active={selectedDueDate === 'tomorrow'}
+          <ShortcutChip
+            testId="chip-due-tomorrow"
+            label="Tomorrow"
+            ariaLabel="Due Tomorrow"
+            isActive={attributes.dueDate === 'tomorrow'}
+            activeColor="blue"
+            icon={<CalendarDays className="w-3.5 h-3.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />}
             onClick={handleToggleDueTomorrow}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border flex-shrink-0 ${
-              selectedDueDate === 'tomorrow'
-                ? 'bg-blue-100 text-blue-700 border-blue-400 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-600 font-semibold'
-                : 'bg-slate-100 text-slate-600 border-slate-200/80 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700/80 dark:hover:bg-neutral-700'
-            }`}
-          >
-            <CalendarDays className="w-3.5 h-3.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-            <span>Tomorrow</span>
-          </button>
+          />
 
           {/* Star Chip */}
-          <button
-            type="button"
-            data-testid="chip-star"
-            aria-label="Star"
-            aria-pressed={isStarred}
-            data-active={isStarred}
+          <ShortcutChip
+            testId="chip-star"
+            label="Star"
+            ariaLabel="Star"
+            isActive={attributes.isStarred}
+            activeColor="amber"
+            icon={
+              <Star
+                className={`w-3.5 h-3.5 flex-shrink-0 ${
+                  attributes.isStarred
+                    ? 'fill-amber-500 text-amber-500'
+                    : 'text-slate-400 dark:text-neutral-500'
+                }`}
+              />
+            }
             onClick={handleToggleStar}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border flex-shrink-0 ${
-              isStarred
-                ? 'bg-amber-100 text-amber-700 border-amber-400 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-600 font-semibold'
-                : 'bg-slate-100 text-slate-600 border-slate-200/80 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700/80 dark:hover:bg-neutral-700'
-            }`}
-          >
-            <Star
-              className={`w-3.5 h-3.5 flex-shrink-0 ${
-                isStarred
-                  ? 'fill-amber-500 text-amber-500'
-                  : 'text-slate-400 dark:text-neutral-500'
-              }`}
-            />
-            <span>Star</span>
-          </button>
+          />
 
           {/* Add to My Day Chip */}
-          <button
-            type="button"
-            data-testid="chip-my-day"
-            aria-label="Add to My Day"
-            aria-pressed={isMyDay}
-            data-active={isMyDay}
+          <ShortcutChip
+            testId="chip-my-day"
+            label="Add to My Day"
+            ariaLabel="Add to My Day"
+            isActive={attributes.isMyDay}
+            activeColor="amber"
+            icon={
+              <Sun
+                className={`w-3.5 h-3.5 flex-shrink-0 ${
+                  attributes.isMyDay
+                    ? 'text-amber-500 stroke-[2.5]'
+                    : 'text-slate-400 dark:text-neutral-500'
+                }`}
+              />
+            }
             onClick={handleToggleMyDay}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border flex-shrink-0 ${
-              isMyDay
-                ? 'bg-amber-100 text-amber-700 border-amber-400 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-600 font-semibold'
-                : 'bg-slate-100 text-slate-600 border-slate-200/80 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700/80 dark:hover:bg-neutral-700'
-            }`}
-          >
-            <Sun
-              className={`w-3.5 h-3.5 flex-shrink-0 ${
-                isMyDay
-                  ? 'text-amber-500 stroke-[2.5]'
-                  : 'text-slate-400 dark:text-neutral-500'
-              }`}
-            />
-            <span>Add to My Day</span>
-          </button>
+          />
         </div>
 
         {/* Input & Submit Row */}
