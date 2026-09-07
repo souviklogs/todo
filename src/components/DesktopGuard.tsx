@@ -30,17 +30,29 @@ export const DesktopGuard: React.FC<DesktopGuardProps> = ({
       ? window.location.href
       : 'http://localhost:5173');
 
+  const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleCopy = async () => {
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+    }
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(resolvedUrl);
       }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
+      // Clipboard write failed or not permitted
+    } finally {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -62,7 +74,7 @@ export const DesktopGuard: React.FC<DesktopGuardProps> = ({
               className="relative w-[360px] sm:w-[390px] h-[740px] sm:h-[780px] bg-neutral-900 rounded-[52px] p-3 shadow-2xl border-[4px] border-neutral-700/80 ring-1 ring-white/10 flex flex-col items-center select-none"
             >
               {/* Dynamic Island / Top Speaker & Camera Notch */}
-              <div className="absolute top-5 z-30 flex items-center justify-center">
+              <div className="absolute top-5 z-30 flex items-center justify-center pointer-events-none">
                 <div className="w-24 h-5 bg-black rounded-full flex items-center justify-end px-2.5 gap-1.5 shadow-inner">
                   <div className="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
                     <div className="w-1 h-1 rounded-full bg-blue-500/80"></div>
@@ -71,7 +83,7 @@ export const DesktopGuard: React.FC<DesktopGuardProps> = ({
               </div>
 
               {/* Speaker Bar line */}
-              <div className="absolute top-2.5 w-12 h-1 bg-neutral-800 rounded-full"></div>
+              <div className="absolute top-2.5 w-12 h-1 bg-neutral-800 rounded-full pointer-events-none"></div>
 
               {/* Inner Screen Surface */}
               <div className="w-full h-full rounded-[40px] overflow-hidden bg-white dark:bg-neutral-900 relative flex flex-col border border-neutral-800/40">
@@ -79,7 +91,7 @@ export const DesktopGuard: React.FC<DesktopGuardProps> = ({
               </div>
 
               {/* Home indicator bar at bottom */}
-              <div className="absolute bottom-2 z-30 w-32 h-1 bg-neutral-600/50 rounded-full"></div>
+              <div className="absolute bottom-2 z-30 w-32 h-1 bg-neutral-600/50 rounded-full pointer-events-none"></div>
             </div>
           </div>
 

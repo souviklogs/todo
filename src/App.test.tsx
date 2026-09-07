@@ -1,13 +1,19 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
 
 describe('App Component Integration Tests', () => {
-  const originalInnerWidth = window.innerWidth;
+  let originalInnerWidth: number;
 
   beforeEach(() => {
-    window.innerWidth = originalInnerWidth;
+    originalInnerWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    if (typeof window !== 'undefined') {
+      window.innerWidth = originalInnerWidth;
+    }
   });
 
   it('renders phone mockup container and QR code on desktop viewports (> 768px)', () => {
@@ -56,22 +62,27 @@ describe('App Component Integration Tests', () => {
   it('allows copying current page URL from QR code card', async () => {
     window.innerWidth = 1024;
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    const originalClipboard = navigator.clipboard;
     Object.assign(navigator, {
       clipboard: {
         writeText: writeTextMock,
       },
     });
 
-    render(<App />);
+    try {
+      render(<App />);
 
-    const copyBtn = screen.getByTestId('copy-url-btn');
-    expect(copyBtn).toBeInTheDocument();
+      const copyBtn = screen.getByTestId('copy-url-btn');
+      expect(copyBtn).toBeInTheDocument();
 
-    await act(async () => {
-      fireEvent.click(copyBtn);
-    });
+      await act(async () => {
+        fireEvent.click(copyBtn);
+      });
 
-    expect(writeTextMock).toHaveBeenCalled();
-    expect(screen.getByText(/Copied!/i)).toBeInTheDocument();
+      expect(writeTextMock).toHaveBeenCalled();
+      expect(screen.getByText(/Copied!/i)).toBeInTheDocument();
+    } finally {
+      Object.assign(navigator, { clipboard: originalClipboard });
+    }
   });
 });
