@@ -16,6 +16,7 @@ export const COLOR_THEMES: ColorThemeOption[] = [
   { id: 'indigo', name: 'Indigo', gradient: 'from-indigo-600 via-violet-600 to-purple-500', bgClass: 'bg-indigo-600' },
   { id: 'cyan', name: 'Cyan', gradient: 'from-cyan-600 via-teal-600 to-blue-500', bgClass: 'bg-cyan-600' },
   { id: 'slate', name: 'Slate', gradient: 'from-slate-700 via-zinc-700 to-stone-600', bgClass: 'bg-slate-700' },
+  { id: 'sunrise', name: 'Sunrise', gradient: 'from-amber-500 via-rose-500 to-blue-600', bgClass: 'bg-amber-500' },
 ];
 
 const THEME_ALIASES: Record<string, string> = {
@@ -23,6 +24,7 @@ const THEME_ALIASES: Record<string, string> = {
   red: 'rose',
   orange: 'amber',
   gray: 'slate',
+  daytime: 'sunrise',
 };
 
 export const THEME_GRADIENTS: Record<string, string> = {

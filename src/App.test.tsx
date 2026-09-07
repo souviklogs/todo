@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
+import { expireStaleMyDayTasks } from './context/TodoContext';
+import type { Task } from './types/todo';
 
 describe('App Component Integration Tests', () => {
   let originalInnerWidth: number;
@@ -805,6 +807,297 @@ describe('App Component Integration Tests', () => {
       // Open Important and verify task-2 is listed
       fireEvent.click(screen.getByTestId('list-item-important'));
       expect(screen.getByText('Try adding a new task below')).toBeInTheDocument();
+    });
+  });
+
+  describe("'My Day' Daily Planning & Midnight Rollover (Issue #7)", () => {
+    it("'My Day' smart list is available at the top of the drawer with sunrise/blue gradient styling", () => {
+      render(<App />);
+
+      // Open navigation drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      // 'My Day' smart list item exists
+      const myDayItem = screen.getByTestId('list-item-my-day');
+      expect(myDayItem).toBeInTheDocument();
+      expect(myDayItem).toHaveTextContent('My Day');
+
+      // Verify My Day is at the top of the drawer lists
+      const drawer = screen.getByTestId('navigation-drawer');
+      const allListItems = within(drawer).getAllByRole('button', { name: /^(My Day|Tasks|Important|Personal|Work)/i });
+      expect(allListItems[0]).toHaveTextContent('My Day');
+
+      // Switch to 'My Day'
+      fireEvent.click(myDayItem);
+
+      // Header displays 'My Day' with sunrise styling
+      const header = screen.getByTestId('mobile-shell-header');
+      expect(header).toHaveTextContent('My Day');
+      expect(header).toHaveAttribute('data-theme', 'sunrise');
+      expect(header.className).toContain('from-amber-500');
+      expect(header.className).toContain('to-blue-600');
+
+      // System list options button is disabled
+      expect(screen.getByTestId('list-options-btn')).toBeDisabled();
+
+      // In drawer, My Day does not have an edit button
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.queryByTestId('edit-list-my-day')).not.toBeInTheDocument();
+    });
+
+    it('every task card displays an interactive My Day button with active/inactive state', () => {
+      render(<App />);
+
+      const myDayBtn1 = screen.getByTestId('my-day-task-task-1');
+      const myDayBtn2 = screen.getByTestId('my-day-task-task-2');
+
+      expect(myDayBtn1).toBeInTheDocument();
+      expect(myDayBtn1).toHaveAttribute('data-my-day', 'false');
+      expect(myDayBtn1).toHaveAttribute('aria-pressed', 'false');
+      expect(myDayBtn1).toHaveAttribute('aria-label', expect.stringContaining('Add'));
+
+      expect(myDayBtn2).toBeInTheDocument();
+      expect(myDayBtn2).toHaveAttribute('data-my-day', 'false');
+      expect(myDayBtn2).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('tapping the My Day button toggles task in My Day with visual active/inactive state', () => {
+      render(<App />);
+
+      const myDayBtn2 = screen.getByTestId('my-day-task-task-2');
+      expect(myDayBtn2).toHaveAttribute('data-my-day', 'false');
+
+      // Click to add to My Day
+      fireEvent.click(myDayBtn2);
+      expect(myDayBtn2).toHaveAttribute('data-my-day', 'true');
+      expect(myDayBtn2).toHaveAttribute('aria-pressed', 'true');
+      expect(myDayBtn2).toHaveAttribute('aria-label', expect.stringContaining('Remove'));
+
+      // Click again to remove from My Day
+      fireEvent.click(myDayBtn2);
+      expect(myDayBtn2).toHaveAttribute('data-my-day', 'false');
+      expect(myDayBtn2).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('shows My Day smart list in navigation drawer with real-time count of active tasks', () => {
+      render(<App />);
+
+      // Initially 0 tasks in My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-my-day')).toHaveTextContent('0');
+
+      // Close drawer and add task-2 to My Day
+      fireEvent.click(screen.getByRole('button', { name: /close navigation drawer/i }));
+      fireEvent.click(screen.getByTestId('my-day-task-task-2'));
+
+      // Reopen drawer -> count should be 1
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-my-day')).toHaveTextContent('1');
+
+      // Close drawer and add task-1 to My Day -> count becomes 2
+      fireEvent.click(screen.getByRole('button', { name: /close navigation drawer/i }));
+      fireEvent.click(screen.getByTestId('my-day-task-task-1'));
+
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-my-day')).toHaveTextContent('2');
+
+      // Complete task-1 -> active My Day count should decrement to 1
+      fireEvent.click(screen.getByRole('button', { name: /close navigation drawer/i }));
+      const checkbox1 = screen.getByRole('checkbox', { name: 'Welcome to Tasks!' });
+      fireEvent.click(checkbox1);
+
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-my-day')).toHaveTextContent('1');
+    });
+
+    it('opening My Day shows all tasks added to My Day regardless of parent list', () => {
+      render(<App />);
+
+      // Add task-1 from Tasks to My Day
+      fireEvent.click(screen.getByTestId('my-day-task-task-1'));
+
+      // Switch to Work list and add task-5 to My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-work'));
+      fireEvent.click(screen.getByTestId('my-day-task-task-5'));
+
+      // Open drawer and switch to My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-my-day'));
+
+      // Both tasks from different parent lists appear in My Day
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+      expect(screen.getByText('Quarterly review presentation')).toBeInTheDocument();
+
+      // Tasks not in My Day do not appear
+      expect(screen.queryByText('Try adding a new task below')).not.toBeInTheDocument();
+      expect(screen.queryByText('Plan weekend trip')).not.toBeInTheDocument();
+    });
+
+    it('removing a task from My Day inside My Day removes it while leaving it safely in its parent list', () => {
+      render(<App />);
+
+      // Switch to Work list and add task-5 to My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-work'));
+      fireEvent.click(screen.getByTestId('my-day-task-task-5'));
+
+      // Open My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-my-day'));
+      expect(screen.getByText('Quarterly review presentation')).toBeInTheDocument();
+
+      // Remove from My Day by clicking the Sun button
+      const myDayBtnWorkTask = screen.getByTestId('my-day-task-task-5');
+      fireEvent.click(myDayBtnWorkTask);
+
+      // Task is immediately removed from My Day view
+      expect(screen.queryByText('Quarterly review presentation')).not.toBeInTheDocument();
+
+      // Verify drawer count for My Day is 0
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-my-day')).toHaveTextContent('0');
+
+      // Switch to Work list -> task is still safely present in parent list!
+      fireEvent.click(screen.getByTestId('list-item-work'));
+      expect(screen.getByText('Quarterly review presentation')).toBeInTheDocument();
+      expect(screen.getByTestId('my-day-task-task-5')).toHaveAttribute('data-my-day', 'false');
+    });
+
+    it('allows adding a task directly from My Day list, marking it in My Day and assigning safely to Tasks', () => {
+      render(<App />);
+
+      // Switch to My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-my-day'));
+
+      // Quick-add a new task in My Day
+      const input = screen.getByPlaceholderText('Add a task');
+      fireEvent.change(input, { target: { value: 'Prepare morning smoothie' } });
+      fireEvent.submit(input.closest('form')!);
+
+      // Newly added task appears in My Day list and is active in My Day
+      expect(screen.getByText('Prepare morning smoothie')).toBeInTheDocument();
+      const newTaskItem = screen.getByText('Prepare morning smoothie').closest('li')!;
+      const sunBtn = within(newTaskItem).getByRole('button', { name: /remove.*from my day/i });
+      expect(sunBtn).toHaveAttribute('data-my-day', 'true');
+
+      // Open drawer and switch to Tasks -> task safely exists in parent Tasks list
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-tasks'));
+      expect(screen.getByText('Prepare morning smoothie')).toBeInTheDocument();
+    });
+
+    it('midnight rollover check automatically clears past-midnight tasks out of My Day and preserves parent lists', () => {
+      // Seed localStorage with a task in My Day having yesterday's date
+      const yesterdayDate = '2026-09-01';
+      const seededTasks = [
+        {
+          id: 'task-yesterday',
+          title: 'Yesterday priority task',
+          completed: false,
+          isImportant: false,
+          inMyDay: true,
+          myDayDate: yesterdayDate,
+          listId: 'tasks',
+          createdAt: '2026-09-01T08:00:00.000Z',
+        },
+      ];
+      localStorage.setItem('todo_tasks', JSON.stringify(seededTasks));
+
+      // Render App - midnight rollover check runs upon load
+      render(<App />);
+
+      // Switch to My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-my-day')).toHaveTextContent('0');
+      fireEvent.click(screen.getByTestId('list-item-my-day'));
+
+      // 'Yesterday priority task' has dropped out of My Day
+      expect(screen.queryByText('Yesterday priority task')).not.toBeInTheDocument();
+
+      // Switch to parent list 'Tasks'
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-tasks'));
+
+      // Task is safely preserved in its parent list!
+      expect(screen.getByText('Yesterday priority task')).toBeInTheDocument();
+      expect(screen.getByTestId('my-day-task-task-yesterday')).toHaveAttribute('data-my-day', 'false');
+
+      // Check localStorage to confirm rollover was persisted
+      const storedTasks = JSON.parse(localStorage.getItem('todo_tasks') || '[]');
+      const rolledOverTask = storedTasks.find((t: { id: string }) => t.id === 'task-yesterday');
+      expect(rolledOverTask.inMyDay).toBe(false);
+      expect(rolledOverTask.myDayDate).toBeNull();
+    });
+
+    it('persists My Day task status across simulated page reload in localStorage', () => {
+      const { unmount } = render(<App />);
+
+      // Add 'Try adding a new task below' to My Day
+      const myDayBtn = screen.getByTestId('my-day-task-task-2');
+      fireEvent.click(myDayBtn);
+      expect(myDayBtn).toHaveAttribute('data-my-day', 'true');
+
+      // Simulate browser refresh
+      unmount();
+      render(<App />);
+
+      // Verify task-2 remains in My Day
+      expect(screen.getByTestId('my-day-task-task-2')).toHaveAttribute('data-my-day', 'true');
+
+      // Open drawer and check My Day count is 1
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-my-day')).toHaveTextContent('1');
+
+      // Open My Day and verify task-2 is listed
+      fireEvent.click(screen.getByTestId('list-item-my-day'));
+      expect(screen.getByText('Try adding a new task below')).toBeInTheDocument();
+    });
+
+    it('expireStaleMyDayTasks clears past-midnight and dateless tasks while preserving parent lists', () => {
+      const tasks: Task[] = [
+        {
+          id: '1',
+          title: 'Past task',
+          completed: false,
+          inMyDay: true,
+          myDayDate: '2026-08-30',
+          listId: 'tasks',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          title: 'Dateless task',
+          completed: false,
+          inMyDay: true,
+          myDayDate: null,
+          listId: 'tasks',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '3',
+          title: 'Today task',
+          completed: false,
+          inMyDay: true,
+          myDayDate: '2026-09-08',
+          listId: 'tasks',
+          createdAt: new Date().toISOString(),
+        },
+      ];
+
+      const { tasks: expired, changed } = expireStaleMyDayTasks(tasks, '2026-09-08');
+      expect(changed).toBe(true);
+      expect(expired[0].inMyDay).toBe(false);
+      expect(expired[0].myDayDate).toBeNull();
+      expect(expired[1].inMyDay).toBe(false);
+      expect(expired[1].myDayDate).toBeNull();
+      expect(expired[2].inMyDay).toBe(true);
+      expect(expired[2].myDayDate).toBe('2026-09-08');
+
+      // Subsequent call when all are fresh reports changed = false
+      const rerun = expireStaleMyDayTasks(expired, '2026-09-08');
+      expect(rerun.changed).toBe(false);
     });
   });
 });
