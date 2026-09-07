@@ -1,13 +1,13 @@
 import React from 'react';
 import { Sparkles, Star } from 'lucide-react';
-import { useTodoContext } from '../context/TodoContext';
+import { useTodoContext, IMPORTANT_LIST } from '../context/TodoContext';
 import { TaskItem } from './TaskItem';
 
 export const TaskList: React.FC = () => {
   const { currentTasks, currentList, toggleTask, deleteTask, toggleImportant } = useTodoContext();
 
   if (currentTasks.length === 0) {
-    const isImportantList = currentList.id === 'important';
+    const isImportantList = currentList.id === IMPORTANT_LIST.id;
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center px-4">
         <div

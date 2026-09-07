@@ -158,7 +158,6 @@ interface TodoContextType {
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
   toggleImportant: (id: string) => void;
-  toggleStar: (id: string) => void;
   addList: (data: CreateTodoListInput) => TodoList;
   updateList: (id: string, updates: UpdateTodoListInput) => void;
   deleteList: (id: string) => void;
@@ -204,7 +203,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   }, [lists]);
 
   const currentTasks = useMemo(() => {
-    if (currentList.id === 'important') {
+    if (currentList.id === IMPORTANT_LIST.id) {
       return tasks.filter((t) => Boolean(t.isImportant));
     }
     return tasks.filter((t) => (t.listId ?? DEFAULT_LIST.id) === currentList.id);
@@ -214,7 +213,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     const trimmed = title.trim();
     if (!trimmed) return;
 
-    const isImportantView = currentList.id === 'important';
+    const isImportantView = currentList.id === IMPORTANT_LIST.id;
     const targetListId = listId ?? (isImportantView ? DEFAULT_LIST.id : currentList.id);
 
     const newTask: Task = {
@@ -299,7 +298,6 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         toggleTask,
         deleteTask,
         toggleImportant,
-        toggleStar: toggleImportant,
         addList,
         updateList,
         deleteList,
