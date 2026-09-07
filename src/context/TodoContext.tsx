@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import type { Task, TodoList } from '../types/todo';
+import type { Task, TodoList, CreateTodoListInput, UpdateTodoListInput } from '../types/todo';
+import { DEFAULT_THEME_ID } from '../constants/theme';
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
@@ -8,7 +9,7 @@ export const DEFAULT_LIST: TodoList = {
   id: 'tasks',
   name: 'Tasks',
   icon: 'ListTodo',
-  colorTheme: 'blue',
+  colorTheme: DEFAULT_THEME_ID,
   isSystem: true,
 };
 
@@ -138,8 +139,8 @@ interface TodoContextType {
   addTask: (title: string, listId?: string) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
-  addList: (data: { name: string; icon?: string; colorTheme?: string }) => TodoList;
-  updateList: (id: string, updates: Partial<Pick<TodoList, 'name' | 'icon' | 'colorTheme'>>) => void;
+  addList: (data: CreateTodoListInput) => TodoList;
+  updateList: (id: string, updates: UpdateTodoListInput) => void;
   deleteList: (id: string) => void;
 }
 
@@ -215,13 +216,13 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   }, []);
 
   const addList = useCallback(
-    (data: { name: string; icon?: string; colorTheme?: string }): TodoList => {
+    (data: CreateTodoListInput): TodoList => {
       const trimmed = data.name.trim();
       const newList: TodoList = {
         id: `list-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         name: trimmed || 'Untitled list',
         icon: data.icon || '📋',
-        colorTheme: data.colorTheme || 'blue',
+        colorTheme: data.colorTheme || DEFAULT_THEME_ID,
         isSystem: false,
       };
       setLists((prev) => [...prev, newList]);
@@ -231,7 +232,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   );
 
   const updateList = useCallback(
-    (id: string, updates: Partial<Pick<TodoList, 'name' | 'icon' | 'colorTheme'>>) => {
+    (id: string, updates: UpdateTodoListInput) => {
       setLists((prev) =>
         prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
       );

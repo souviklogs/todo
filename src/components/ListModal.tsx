@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Trash2 } from 'lucide-react';
-import type { TodoList } from '../types/todo';
-import { COLOR_THEMES, EMOJI_OPTIONS, getThemeGradient } from '../constants/theme';
+import type { TodoList, CreateTodoListInput } from '../types/todo';
+import { COLOR_THEMES, EMOJI_OPTIONS, getThemeGradient, DEFAULT_THEME_ID } from '../constants/theme';
 
 export interface ListModalProps {
   isOpen: boolean;
   mode: 'create' | 'edit';
   list?: TodoList | null;
   onClose: () => void;
-  onSave: (data: { name: string; icon: string; colorTheme: string }) => void;
+  onSave: (data: Required<CreateTodoListInput>) => void;
   onDelete?: (listId: string) => void;
 }
 
@@ -22,7 +22,7 @@ export const ListModal: React.FC<ListModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📋');
-  const [selectedColor, setSelectedColor] = useState('blue');
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_THEME_ID);
   const [customEmoji, setCustomEmoji] = useState('');
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export const ListModal: React.FC<ListModalProps> = ({
       } else {
         setName('');
         setSelectedEmoji('📋');
-        setSelectedColor('blue');
+        setSelectedColor(DEFAULT_THEME_ID);
         setCustomEmoji('');
       }
     }

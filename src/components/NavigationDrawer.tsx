@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, ListTodo, User, Briefcase, Folder, Sun, Star, Plus, Pencil } from 'lucide-react';
 import { useTodoContext, DEFAULT_LIST } from '../context/TodoContext';
 import { ListModal } from './ListModal';
-import type { TodoList } from '../types/todo';
+import type { TodoList, CreateTodoListInput } from '../types/todo';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -74,7 +74,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const handleSave = (data: { name: string; icon: string; colorTheme: string }) => {
+  const handleSave = (data: Required<CreateTodoListInput>) => {
     if (modalMode === 'create') {
       const newList = addList(data);
       setCurrentList(newList);
