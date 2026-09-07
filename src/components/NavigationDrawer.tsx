@@ -1,11 +1,22 @@
-import React, { useEffect, useMemo } from 'react';
-import { X, ListTodo, User, Briefcase, Folder, Sun, Star } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { X, ListTodo, User, Briefcase, Folder, Sun, Star, Plus, Pencil } from 'lucide-react';
 import { useTodoContext, DEFAULT_LIST } from '../context/TodoContext';
+import { ListModal } from './ListModal';
+import type { TodoList } from '../types/todo';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+const LUCIDE_ICONS: Record<string, React.FC<{ className?: string }>> = {
+  ListTodo,
+  User,
+  Briefcase,
+  Sun,
+  Star,
+  Folder,
+};
 
 export const renderListIcon = (iconName: string, isSelected: boolean = false) => {
   const iconClass = `w-5 h-5 flex-shrink-0 ${
@@ -14,27 +25,29 @@ export const renderListIcon = (iconName: string, isSelected: boolean = false) =>
       : 'text-slate-500 dark:text-neutral-400 group-hover:text-slate-700 dark:group-hover:text-neutral-200'
   }`;
 
-  switch (iconName) {
-    case 'ListTodo':
-      return <ListTodo className={iconClass} />;
-    case 'User':
-      return <User className={iconClass} />;
-    case 'Briefcase':
-      return <Briefcase className={iconClass} />;
-    case 'Sun':
-      return <Sun className={iconClass} />;
-    case 'Star':
-      return <Star className={iconClass} />;
-    default:
-      if (iconName && iconName.length <= 4) {
-        return <span className="text-lg flex-shrink-0 leading-none">{iconName}</span>;
-      }
-      return <Folder className={iconClass} />;
+  const IconComp = LUCIDE_ICONS[iconName];
+  if (IconComp) {
+    return <IconComp className={iconClass} />;
   }
+
+  if (iconName) {
+    return (
+      <span className="text-lg flex-shrink-0 leading-none" role="img" aria-label="list icon">
+        {iconName}
+      </span>
+    );
+  }
+
+  return <Folder className={iconClass} />;
 };
 
 export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose }) => {
-  const { tasks, lists, currentList, setCurrentList } = useTodoContext();
+  const { tasks, lists, currentList, setCurrentList, addList, updateList, deleteList } =
+    useTodoContext();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [targetList, setTargetList] = useState<TodoList | null>(null);
 
   const activeCountsByList = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -60,6 +73,23 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleSave = (data: { name: string; icon: string; colorTheme: string }) => {
+    if (modalMode === 'create') {
+      const newList = addList(data);
+      setCurrentList(newList);
+      setIsModalOpen(false);
+      onClose();
+    } else if (targetList) {
+      updateList(targetList.id, data);
+      setIsModalOpen(false);
+    }
+  };
+
+  const handleDelete = (listId: string) => {
+    deleteList(listId);
+    setIsModalOpen(false);
+  };
 
   if (!isOpen) return null;
 
@@ -116,40 +146,88 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
             const isSelected = currentList.id === list.id;
 
             return (
-              <button
+              <div
                 key={list.id}
-                type="button"
-                data-testid={`list-item-${list.id}`}
-                aria-current={isSelected ? 'page' : undefined}
-                onClick={() => {
-                  setCurrentList(list);
-                  onClose();
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left transition-colors cursor-pointer group ${
+                className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl transition-colors group ${
                   isSelected
                     ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold'
                     : 'text-slate-700 dark:text-neutral-200 hover:bg-slate-100 dark:hover:bg-neutral-800 font-medium'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  data-testid={`list-item-${list.id}`}
+                  aria-current={isSelected ? 'page' : undefined}
+                  onClick={() => {
+                    setCurrentList(list);
+                    onClose();
+                  }}
+                  className="flex items-center gap-3 min-w-0 flex-1 py-1.5 cursor-pointer text-left"
+                >
                   {renderListIcon(list.icon, isSelected)}
                   <span className="truncate text-sm">{list.name}</span>
+                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {!list.isSystem && (
+                    <button
+                      type="button"
+                      aria-label={`Edit ${list.name} list`}
+                      data-testid={`edit-list-${list.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTargetList(list);
+                        setModalMode('edit');
+                        setIsModalOpen(true);
+                      }}
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200 hover:bg-slate-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <span
+                    data-testid={`list-count-${list.id}`}
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      isSelected
+                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                        : 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 group-hover:bg-slate-200 dark:group-hover:bg-neutral-700'
+                    }`}
+                  >
+                    {activeCount}
+                  </span>
                 </div>
-                <span
-                  data-testid={`list-count-${list.id}`}
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    isSelected
-                      ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                      : 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 group-hover:bg-slate-200 dark:group-hover:bg-neutral-700'
-                  }`}
-                >
-                  {activeCount}
-                </span>
-              </button>
+              </div>
             );
           })}
         </div>
+
+        {/* New List Action Button */}
+        <div className="p-3 border-t border-slate-100 dark:border-neutral-800 mt-auto">
+          <button
+            type="button"
+            data-testid="add-list-btn"
+            aria-label="+ New List"
+            onClick={() => {
+              setModalMode('create');
+              setTargetList(null);
+              setIsModalOpen(true);
+            }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 font-semibold text-sm transition-colors cursor-pointer"
+          >
+            <Plus className="w-5 h-5" />
+            <span>+ New List</span>
+          </button>
+        </div>
       </nav>
+
+      {/* List Creation / Editing Dialog */}
+      <ListModal
+        isOpen={isModalOpen}
+        mode={modalMode}
+        list={targetList}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
+        onDelete={handleDelete}
+      />
     </>
   );
 };
