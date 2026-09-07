@@ -144,11 +144,18 @@ describe('App Component Integration Tests', () => {
 
       // Toggle to complete
       fireEvent.click(taskCheckbox);
-      expect(taskCheckbox).toBeChecked();
+      const completedCheckbox = screen.getByRole('checkbox', {
+        name: 'Try adding a new task below',
+      });
+      expect(completedCheckbox).toBeChecked();
 
       // Toggle back to uncomplete
-      fireEvent.click(taskCheckbox);
-      expect(taskCheckbox).not.toBeChecked();
+      fireEvent.click(completedCheckbox);
+      expect(
+        screen.getByRole('checkbox', {
+          name: 'Try adding a new task below',
+        })
+      ).not.toBeChecked();
     });
 
     it('allows user to delete a task from the list', () => {
@@ -179,7 +186,9 @@ describe('App Component Integration Tests', () => {
         name: 'Persisted Task',
       });
       fireEvent.click(persistedCheckbox);
-      expect(persistedCheckbox).toBeChecked();
+      expect(
+        screen.getByRole('checkbox', { name: 'Persisted Task' })
+      ).toBeChecked();
 
       // Delete an existing task
       const deleteBtn = screen.getByRole('button', {
@@ -358,7 +367,9 @@ describe('App Component Integration Tests', () => {
         name: 'Welcome to Tasks!',
       });
       fireEvent.click(taskCheckbox);
-      expect(taskCheckbox).toBeChecked();
+      expect(
+        screen.getByRole('checkbox', { name: 'Welcome to Tasks!' })
+      ).toBeChecked();
 
       // Open drawer again and verify Tasks active count is now 1
       fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
@@ -1855,6 +1866,163 @@ describe('App Component Integration Tests', () => {
       expect(within(reloadedCard).getByRole('button', { name: /star/i })).toHaveAttribute('data-starred', 'true');
       expect(within(reloadedCard).getByRole('button', { name: /my day/i })).toHaveAttribute('data-my-day', 'true');
       expect(within(reloadedCard).getByText(/Due Today/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Collapsible Completed Tasks Section (Issue #11)', () => {
+    beforeEach(() => {
+      window.innerWidth = 375;
+      localStorage.clear();
+    });
+
+    it('groups completed tasks under a "Completed (N)" accordion at the bottom of the active list', () => {
+      render(<App />);
+
+      // Active list contains the 2 uncompleted default tasks
+      const taskList = screen.getByTestId('task-list');
+      expect(within(taskList).getByText('Welcome to Tasks!')).toBeInTheDocument();
+      expect(within(taskList).getByText('Try adding a new task below')).toBeInTheDocument();
+      expect(within(taskList).queryByText('Tap the circle to mark a task complete')).not.toBeInTheDocument();
+
+      // Completed section exists at the bottom with count 1
+      const completedSection = screen.getByTestId('completed-section');
+      expect(completedSection).toBeInTheDocument();
+      expect(screen.getByTestId('completed-count-badge')).toHaveTextContent('Completed (1)');
+      expect(within(completedSection).getByText('Tap the circle to mark a task complete')).toBeInTheDocument();
+    });
+
+    it('moves an active task to the completed accordion immediately when checked', () => {
+      render(<App />);
+
+      const taskList = screen.getByTestId('task-list');
+      expect(within(taskList).getByText('Welcome to Tasks!')).toBeInTheDocument();
+      expect(screen.getByTestId('completed-count-badge')).toHaveTextContent('Completed (1)');
+
+      // Complete 'Welcome to Tasks!'
+      const checkbox = screen.getByRole('checkbox', { name: 'Welcome to Tasks!' });
+      fireEvent.click(checkbox);
+
+      // Now active list does not contain 'Welcome to Tasks!'
+      expect(within(taskList).queryByText('Welcome to Tasks!')).not.toBeInTheDocument();
+
+      // Completed section badge increments to 2 and contains 'Welcome to Tasks!'
+      expect(screen.getByTestId('completed-count-badge')).toHaveTextContent('Completed (2)');
+      const completedSection = screen.getByTestId('completed-section');
+      expect(within(completedSection).getByText('Welcome to Tasks!')).toBeInTheDocument();
+    });
+
+    it('expands and collapses the completed section on tap with smooth chevron rotation', () => {
+      render(<App />);
+
+      const toggleBtn = screen.getByTestId('completed-accordion-toggle');
+      const chevron = screen.getByTestId('completed-chevron');
+      const completedList = screen.getByTestId('completed-tasks-list');
+
+      // Initially collapsed
+      expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+      expect(chevron).toHaveClass('-rotate-90');
+      expect(completedList).toHaveAttribute('data-expanded', 'false');
+
+      // Tap to expand
+      fireEvent.click(toggleBtn);
+      expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
+      expect(chevron).toHaveClass('rotate-0');
+      expect(completedList).toHaveAttribute('data-expanded', 'true');
+
+      // Tap to collapse again
+      fireEvent.click(toggleBtn);
+      expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+      expect(chevron).toHaveClass('-rotate-90');
+      expect(completedList).toHaveAttribute('data-expanded', 'false');
+    });
+
+    it('shows strikethrough styling and checked box for completed tasks', () => {
+      render(<App />);
+
+      const completedSection = screen.getByTestId('completed-section');
+      const taskText = within(completedSection).getByText('Tap the circle to mark a task complete');
+      expect(taskText).toHaveClass('line-through');
+
+      const checkbox = within(completedSection).getByRole('checkbox', {
+        name: 'Tap the circle to mark a task complete',
+      });
+      expect(checkbox).toBeChecked();
+    });
+
+    it('moves completed task back to active section immediately when unchecked', () => {
+      render(<App />);
+
+      const completedSection = screen.getByTestId('completed-section');
+      const taskList = screen.getByTestId('task-list');
+
+      expect(screen.getByTestId('completed-count-badge')).toHaveTextContent('Completed (1)');
+      expect(within(taskList).queryByText('Tap the circle to mark a task complete')).not.toBeInTheDocument();
+
+      // Uncheck completed task
+      const completedCheckbox = within(completedSection).getByRole('checkbox', {
+        name: 'Tap the circle to mark a task complete',
+      });
+      fireEvent.click(completedCheckbox);
+
+      // Moved back to active tasks list
+      expect(within(taskList).getByText('Tap the circle to mark a task complete')).toBeInTheDocument();
+      const restoredText = within(taskList).getByText('Tap the circle to mark a task complete');
+      expect(restoredText).not.toHaveClass('line-through');
+
+      const restoredCheckbox = within(taskList).getByRole('checkbox', {
+        name: 'Tap the circle to mark a task complete',
+      });
+      expect(restoredCheckbox).not.toBeChecked();
+
+      // Completed section disappears when no completed tasks remain
+      expect(screen.queryByTestId('completed-section')).not.toBeInTheDocument();
+    });
+
+    it('works across different smart lists (e.g. Important)', () => {
+      render(<App />);
+
+      // Switch to Important list
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-important'));
+
+      // Initially 2 important tasks (task-1 and task-5), neither completed
+      expect(screen.queryByTestId('completed-section')).not.toBeInTheDocument();
+
+      // Complete 'Welcome to Tasks!' inside Important
+      const checkbox = screen.getByRole('checkbox', { name: 'Welcome to Tasks!' });
+      fireEvent.click(checkbox);
+
+      // Completed section now appears in Important with badge 'Completed (1)'
+      expect(screen.getByTestId('completed-section')).toBeInTheDocument();
+      expect(screen.getByTestId('completed-count-badge')).toHaveTextContent('Completed (1)');
+
+      // Uncheck it to restore
+      const completedCheckbox = within(screen.getByTestId('completed-section')).getByRole('checkbox', {
+        name: 'Welcome to Tasks!',
+      });
+      fireEvent.click(completedCheckbox);
+      expect(screen.queryByTestId('completed-section')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Welcome to Tasks!' })).not.toBeChecked();
+    });
+
+    it('persists completed tasks in the accordion across simulated page reload in localStorage', () => {
+      const { unmount } = render(<App />);
+
+      // Complete 'Welcome to Tasks!'
+      const checkbox = screen.getByRole('checkbox', { name: 'Welcome to Tasks!' });
+      fireEvent.click(checkbox);
+      expect(screen.getByTestId('completed-count-badge')).toHaveTextContent('Completed (2)');
+
+      unmount();
+
+      // Remount
+      render(<App />);
+
+      expect(screen.getByTestId('completed-count-badge')).toHaveTextContent('Completed (2)');
+      const completedSection = screen.getByTestId('completed-section');
+      expect(within(completedSection).getByText('Welcome to Tasks!')).toBeInTheDocument();
+      expect(within(completedSection).getByText('Tap the circle to mark a task complete')).toBeInTheDocument();
+      expect(within(screen.getByTestId('task-list')).getByText('Try adding a new task below')).toBeInTheDocument();
     });
   });
 });
