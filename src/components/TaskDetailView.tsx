@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Check, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Check, Plus, Trash2, Sun, Calendar, FileText } from 'lucide-react';
 import type { Task } from '../types/todo';
-import { getStepProgress } from '../types/todo';
+import {
+  getStepProgress,
+  formatDueDateBadge,
+  getLocalDateString,
+  getTomorrowDateString,
+} from '../types/todo';
 import { useTodoContext } from '../context/TodoContext';
 
 interface TaskDetailViewProps {
@@ -10,9 +15,38 @@ interface TaskDetailViewProps {
 }
 
 export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose }) => {
-  const { toggleTask, deleteTask, addStep, toggleStep, deleteStep, currentList } =
-    useTodoContext();
+  const {
+    toggleTask,
+    deleteTask,
+    addStep,
+    toggleStep,
+    deleteStep,
+    toggleMyDay,
+    setTaskNotes,
+    setTaskDueDate,
+    currentList,
+  } = useTodoContext();
   const [newStepTitle, setNewStepTitle] = useState('');
+  const [notes, setNotes] = useState(task?.notes ?? '');
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setNotes(task?.notes ?? '');
+  }, [task?.id, task?.notes]);
+
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setNotes(val);
+    if (task) {
+      setTaskNotes(task.id, val);
+    }
+  };
+
+  const handleNotesBlur = () => {
+    if (task) {
+      setTaskNotes(task.id, notes);
+    }
+  };
 
   // Close on Escape key press
   useEffect(() => {
@@ -30,6 +64,9 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
 
   const steps = task.steps ?? [];
   const stepProgress = getStepProgress(steps);
+  const dueDateInfo = formatDueDateBadge(task.dueDate);
+  const todayStr = getLocalDateString();
+  const tomorrowStr = getTomorrowDateString();
 
   const handleAddStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,6 +154,37 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
             </div>
           </div>
         </div>
+
+        {/* My Day Toggle Button */}
+        <button
+          type="button"
+          data-testid="detail-my-day-btn"
+          aria-label={task.inMyDay ? 'Remove from My Day' : 'Add to My Day'}
+          onClick={() => toggleMyDay(task.id)}
+          className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-colors cursor-pointer ${
+            task.inMyDay
+              ? 'bg-amber-50/70 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800/80 text-amber-700 dark:text-amber-300'
+              : 'bg-white dark:bg-neutral-800 border-slate-200/80 dark:border-neutral-700/80 text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-750'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Sun
+              className={`w-5 h-5 flex-shrink-0 ${
+                task.inMyDay
+                  ? 'text-amber-500 fill-amber-400 stroke-[2.5]'
+                  : 'text-slate-400 dark:text-neutral-400'
+              }`}
+            />
+            <span className="text-sm font-medium">
+              {task.inMyDay ? 'Remove from My Day' : 'Add to My Day'}
+            </span>
+          </div>
+          {task.inMyDay && (
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded-full">
+              Added
+            </span>
+          )}
+        </button>
 
         {/* Steps / Subtasks Section */}
         <section
@@ -217,6 +285,143 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task, onClose })
               Add
             </button>
           </form>
+        </section>
+
+        {/* Due Date Section */}
+        <section
+          aria-label="Due Date"
+          data-testid="detail-due-date-section"
+          className="bg-white dark:bg-neutral-800 rounded-xl p-4 border border-slate-200/80 dark:border-neutral-700/80 shadow-xs space-y-3"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <h3 className="text-xs font-semibold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+                Due Date
+              </h3>
+            </div>
+            {task.dueDate && (
+              <button
+                type="button"
+                aria-label="Clear due date"
+                data-testid="detail-clear-due-date-btn"
+                onClick={() => setTaskDueDate(task.id, null)}
+                className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:underline cursor-pointer"
+              >
+                Clear due date
+              </button>
+            )}
+          </div>
+
+          {/* Current Due Date Display (if set) */}
+          {task.dueDate && dueDateInfo && (
+            <div
+              data-testid="detail-due-date-display"
+              className={`text-xs px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1.5 ${
+                dueDateInfo.isOverdue
+                  ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 font-medium'
+                  : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 font-medium'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{dueDateInfo.label}</span>
+              <span className="text-slate-400 dark:text-neutral-500 font-normal">({task.dueDate})</span>
+            </div>
+          )}
+
+          {/* Quick Shortcuts */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              data-testid="due-date-shortcut-today"
+              onClick={() => setTaskDueDate(task.id, todayStr)}
+              className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer text-center ${
+                task.dueDate === todayStr
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : 'border-slate-200 dark:border-neutral-700 text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-750'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              data-testid="due-date-shortcut-tomorrow"
+              onClick={() => setTaskDueDate(task.id, tomorrowStr)}
+              className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer text-center ${
+                task.dueDate === tomorrowStr
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : 'border-slate-200 dark:border-neutral-700 text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-750'
+              }`}
+            >
+              Tomorrow
+            </button>
+            <button
+              type="button"
+              data-testid="due-date-shortcut-custom"
+              aria-label="Pick Date (Custom Date)"
+              onClick={() => {
+                dateInputRef.current?.focus();
+                try {
+                  dateInputRef.current?.showPicker?.();
+                } catch {}
+              }}
+              className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer text-center ${
+                task.dueDate && task.dueDate !== todayStr && task.dueDate !== tomorrowStr
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : 'border-slate-200 dark:border-neutral-700 text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-750'
+              }`}
+            >
+              Custom Date
+            </button>
+          </div>
+
+          {/* Custom Date Input */}
+          <div className="pt-1">
+            <label
+              htmlFor="detail-due-date-input"
+              className="block text-xs font-medium text-slate-500 dark:text-neutral-400 mb-1"
+            >
+              Pick Date / Custom Date
+            </label>
+            <input
+              ref={dateInputRef}
+              id="detail-due-date-input"
+              type="date"
+              aria-label="Custom Date"
+              data-testid="detail-due-date-input"
+              value={task.dueDate ?? ''}
+              onChange={(e) => setTaskDueDate(task.id, e.target.value || null)}
+              className="w-full text-sm px-3 py-2 bg-slate-50 dark:bg-neutral-900 text-slate-800 dark:text-neutral-100 rounded-lg border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 cursor-pointer"
+            />
+          </div>
+        </section>
+
+        {/* Notes Section */}
+        <section
+          aria-label="Notes"
+          data-testid="detail-notes-section"
+          className="bg-white dark:bg-neutral-800 rounded-xl p-4 border border-slate-200/80 dark:border-neutral-700/80 shadow-xs space-y-2"
+        >
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <label
+              htmlFor="detail-notes-textarea"
+              className="text-xs font-semibold text-slate-500 dark:text-neutral-400 uppercase tracking-wider cursor-pointer"
+            >
+              Notes
+            </label>
+          </div>
+          <textarea
+            id="detail-notes-textarea"
+            data-testid="detail-notes-textarea"
+            aria-label="Notes"
+            placeholder="Add notes..."
+            rows={4}
+            value={notes}
+            onChange={handleNotesChange}
+            onBlur={handleNotesBlur}
+            className="w-full bg-slate-50 dark:bg-neutral-900 text-sm text-slate-800 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 rounded-lg p-3 border border-slate-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 resize-y"
+          />
         </section>
       </div>
     </div>

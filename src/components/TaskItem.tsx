@@ -1,7 +1,7 @@
 import React from 'react';
-import { Check, Trash2, Star, Sun } from 'lucide-react';
+import { Check, Trash2, Star, Sun, Calendar } from 'lucide-react';
 import type { Task } from '../types/todo';
-import { getStepProgress } from '../types/todo';
+import { getStepProgress, formatDueDateBadge } from '../types/todo';
 
 interface TaskItemProps {
   task: Task;
@@ -23,6 +23,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   const isStarred = Boolean(task.isImportant);
   const isInMyDay = Boolean(task.inMyDay);
   const stepProgress = getStepProgress(task.steps);
+  const dueDateInfo = formatDueDateBadge(task.dueDate);
 
   return (
     <li
@@ -58,13 +59,37 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         >
           {task.title}
         </span>
-        {stepProgress && (
-          <span
-            data-testid={`task-steps-progress-${task.id}`}
-            className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5"
-          >
-            {stepProgress.label}
-          </span>
+        {(stepProgress || dueDateInfo) && (
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {stepProgress && (
+              <span
+                data-testid={`task-steps-progress-${task.id}`}
+                className="text-xs text-slate-500 dark:text-neutral-400"
+              >
+                {stepProgress.label}
+              </span>
+            )}
+            {dueDateInfo && (
+              <span
+                data-testid={`task-due-date-badge-${task.id}`}
+                data-overdue={dueDateInfo.isOverdue ? 'true' : 'false'}
+                className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md ${
+                  dueDateInfo.isOverdue
+                    ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 font-medium'
+                    : 'text-slate-500 dark:text-neutral-400 bg-slate-100 dark:bg-neutral-800'
+                }`}
+              >
+                <Calendar
+                  className={`w-3 h-3 flex-shrink-0 ${
+                    dueDateInfo.isOverdue
+                      ? 'text-red-500 dark:text-red-400'
+                      : 'text-slate-400 dark:text-neutral-400'
+                  }`}
+                />
+                <span>{dueDateInfo.label}</span>
+              </span>
+            )}
+          </div>
         )}
       </div>
 
