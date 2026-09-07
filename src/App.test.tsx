@@ -2,7 +2,11 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
 import { expireStaleMyDayTasks } from './context/TodoContext';
-import { getStepProgress, type Task } from './types/todo';
+import {
+  getStepProgress,
+  formatDueDateBadge,
+  type Task,
+} from './types/todo';
 
 describe('App Component Integration Tests', () => {
   let originalInnerWidth: number;
@@ -1394,6 +1398,229 @@ describe('App Component Integration Tests', () => {
         total: 3,
         completed: 2,
         label: '2 of 3 steps',
+      });
+    });
+  });
+
+  describe('Task Notes, Due Dates & My Day Toggle in Detail View (Issue #9)', () => {
+    it('detail view includes a multi-line notes section that auto-saves on change and blur', () => {
+      render(<App />);
+
+      // Open detail view for task-1
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      expect(screen.getByTestId('task-detail-view')).toBeInTheDocument();
+
+      const notesTextarea = screen.getByTestId('detail-notes-textarea');
+      expect(notesTextarea).toBeInTheDocument();
+      expect(notesTextarea).toHaveValue('');
+
+      // Type multi-line notes
+      const multilineNotes = 'Line 1: Project kickoff\nLine 2: Review milestones\nLine 3: Wrap up';
+      fireEvent.change(notesTextarea, { target: { value: multilineNotes } });
+      expect(notesTextarea).toHaveValue(multilineNotes);
+
+      // Trigger blur event to verify blur auto-saving
+      fireEvent.blur(notesTextarea);
+
+      // Navigate back to list view
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+      expect(screen.queryByTestId('task-detail-view')).not.toBeInTheDocument();
+
+      // Re-open detail view and verify notes are retained
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      expect(screen.getByTestId('detail-notes-textarea')).toHaveValue(multilineNotes);
+    });
+
+    it('detail view includes a due date picker with quick shortcuts (Today, Tomorrow, Custom Date) and ability to clear due date', () => {
+      render(<App />);
+
+      // Open task-1 detail view
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+
+      // 1. Click 'Today' shortcut
+      const todayBtn = screen.getByRole('button', { name: /^Today$/i });
+      fireEvent.click(todayBtn);
+
+      const dueDisplay = screen.getByTestId('detail-due-date-display');
+      expect(dueDisplay).toHaveTextContent(/Due Today/i);
+
+      // Back to list: task card displays 'Due Today'
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+      expect(screen.getByTestId('task-due-date-badge-task-1')).toHaveTextContent(/Due Today/i);
+
+      // 2. Re-open detail view and click 'Tomorrow' shortcut
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      const tomorrowBtn = screen.getByRole('button', { name: /^Tomorrow$/i });
+      fireEvent.click(tomorrowBtn);
+
+      expect(screen.getByTestId('detail-due-date-display')).toHaveTextContent(/Due Tomorrow/i);
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+      expect(screen.getByTestId('task-due-date-badge-task-1')).toHaveTextContent(/Due Tomorrow/i);
+
+      // 3. Re-open detail view and set custom date via date input
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      const dateInput = screen.getByTestId('detail-due-date-input');
+      fireEvent.change(dateInput, { target: { value: '2026-11-15' } });
+
+      expect(screen.getByTestId('detail-due-date-display')).toHaveTextContent(/Nov 15/i);
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+      expect(screen.getByTestId('task-due-date-badge-task-1')).toHaveTextContent(/Nov 15/i);
+
+      // 4. Clear due date
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      const clearBtn = screen.getByRole('button', { name: /Clear due date/i });
+      fireEvent.click(clearBtn);
+
+      expect(screen.queryByTestId('detail-due-date-display')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Clear due date/i })).not.toBeInTheDocument();
+
+      // Back to list: task card no longer displays due date badge
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+      expect(screen.queryByTestId('task-due-date-badge-task-1')).not.toBeInTheDocument();
+    });
+
+    it('task card displays due date badge with visual overdue indication if past due', () => {
+      render(<App />);
+
+      // Open task-2 ('Try adding a new task below')
+      fireEvent.click(screen.getByText('Try adding a new task below'));
+
+      // Set past due date via date input
+      const dateInput = screen.getByTestId('detail-due-date-input');
+      fireEvent.change(dateInput, { target: { value: '2026-01-01' } });
+
+      // Navigate back to list view
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+
+      // Verify task card displays overdue badge with visual overdue indicator
+      const badge = screen.getByTestId('task-due-date-badge-task-2');
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveAttribute('data-overdue', 'true');
+      expect(badge).toHaveTextContent(/Overdue/i);
+      expect(badge.className).toContain('text-red-600');
+    });
+
+    it('detail view includes "Add to My Day" / "Remove from My Day" toggle button reflecting current status', () => {
+      render(<App />);
+
+      // Demo task-1 is not in My Day initially
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+
+      const myDayBtn = screen.getByTestId('detail-my-day-btn');
+      expect(myDayBtn).toHaveTextContent(/Add to My Day/i);
+      expect(myDayBtn).toHaveAttribute('aria-label', 'Add to My Day');
+
+      // Click to add to My Day
+      fireEvent.click(myDayBtn);
+
+      // Button updates to reflect added status
+      expect(myDayBtn).toHaveTextContent(/Remove from My Day/i);
+      expect(myDayBtn).toHaveAttribute('aria-label', 'Remove from My Day');
+
+      // Navigate back to list view
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+
+      // Task card displays active My Day status
+      expect(screen.getByTestId('my-day-task-task-1')).toHaveAttribute('data-my-day', 'true');
+
+      // Open drawer and check My Day list has task-1
+      fireEvent.click(screen.getByTestId('hamburger-menu-btn'));
+      fireEvent.click(screen.getByText('My Day'));
+
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+
+      // Open detail view from My Day list
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      const detailMyDayBtn = screen.getByTestId('detail-my-day-btn');
+      expect(detailMyDayBtn).toHaveTextContent(/Remove from My Day/i);
+
+      // Click to remove from My Day
+      fireEvent.click(detailMyDayBtn);
+      expect(detailMyDayBtn).toHaveTextContent(/Add to My Day/i);
+
+      // Close detail view: task is removed from My Day view
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+      expect(screen.queryByText('Welcome to Tasks!')).not.toBeInTheDocument();
+
+      // Task still safely preserved in parent Tasks list
+      fireEvent.click(screen.getByTestId('hamburger-menu-btn'));
+      fireEvent.click(screen.getByTestId('list-item-tasks'));
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+    });
+
+    it('persists notes, due dates, and My Day status from detail view across simulated page reload in localStorage', () => {
+      const { unmount } = render(<App />);
+
+      // Add a task 'Important proposal'
+      const taskInput = screen.getByPlaceholderText(/Add a task/i);
+      fireEvent.change(taskInput, { target: { value: 'Important proposal' } });
+      fireEvent.submit(taskInput.closest('form')!);
+
+      fireEvent.click(screen.getByText('Important proposal'));
+
+      // Set multi-line notes
+      const notesInput = screen.getByTestId('detail-notes-textarea');
+      fireEvent.change(notesInput, { target: { value: 'Pitch deck attached.\nBudget confirmed.' } });
+      fireEvent.blur(notesInput);
+
+      // Set due date to Tomorrow
+      fireEvent.click(screen.getByRole('button', { name: /^Tomorrow$/i }));
+
+      // Add to My Day
+      fireEvent.click(screen.getByRole('button', { name: /Add to My Day/i }));
+
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+
+      unmount();
+
+      // Remount App (simulating page reload from localStorage)
+      render(<App />);
+
+      expect(screen.getByText('Important proposal')).toBeInTheDocument();
+      expect(screen.getByText(/Due Tomorrow/i)).toBeInTheDocument();
+
+      // Open detail view and verify all values persisted
+      fireEvent.click(screen.getByText('Important proposal'));
+      expect(screen.getByTestId('detail-notes-textarea')).toHaveValue('Pitch deck attached.\nBudget confirmed.');
+      expect(screen.getByTestId('detail-due-date-display')).toHaveTextContent(/Due Tomorrow/i);
+      expect(screen.getByTestId('detail-my-day-btn')).toHaveTextContent(/Remove from My Day/i);
+    });
+
+    it('formatDueDateBadge computes correct labels and overdue flags for various dates', () => {
+      const fixedToday = '2026-09-08';
+
+      expect(formatDueDateBadge(undefined, fixedToday)).toBeNull();
+      expect(formatDueDateBadge(null, fixedToday)).toBeNull();
+      expect(formatDueDateBadge('', fixedToday)).toBeNull();
+
+      // Today
+      expect(formatDueDateBadge('2026-09-08', fixedToday)).toEqual({
+        label: 'Due Today',
+        isOverdue: false,
+      });
+
+      // Tomorrow
+      expect(formatDueDateBadge('2026-09-09', fixedToday)).toEqual({
+        label: 'Due Tomorrow',
+        isOverdue: false,
+      });
+
+      // Yesterday (overdue)
+      expect(formatDueDateBadge('2026-09-07', fixedToday)).toEqual({
+        label: 'Overdue, Yesterday',
+        isOverdue: true,
+      });
+
+      // Past date (overdue)
+      expect(formatDueDateBadge('2026-09-01', fixedToday)).toEqual({
+        label: 'Overdue, Sep 1',
+        isOverdue: true,
+      });
+
+      // Future date
+      expect(formatDueDateBadge('2026-09-25', fixedToday)).toEqual({
+        label: 'Due Sep 25',
+        isOverdue: false,
       });
     });
   });

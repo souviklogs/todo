@@ -7,8 +7,22 @@ import React, {
   useEffect,
   useRef,
 } from 'react';
-import type { Task, TodoList, CreateTodoListInput, UpdateTodoListInput } from '../types/todo';
+import type {
+  Task,
+  TodoList,
+  CreateTodoListInput,
+  UpdateTodoListInput,
+  DueDateInfo,
+} from '../types/todo';
+import {
+  getLocalDateString,
+  getTomorrowDateString,
+  formatDueDateBadge,
+} from '../types/todo';
 import { DEFAULT_THEME_ID } from '../constants/theme';
+
+export { getLocalDateString, getTomorrowDateString, formatDueDateBadge };
+export type { DueDateInfo };
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
@@ -36,14 +50,6 @@ export const IMPORTANT_LIST: TodoList = {
   colorTheme: 'rose',
   isSystem: true,
 };
-
-export function getLocalDateString(dateInput?: Date | string | number): string {
-  const date = dateInput ? new Date(dateInput) : new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
 
 export const DEFAULT_LISTS: TodoList[] = [
   MY_DAY_LIST,
@@ -223,6 +229,9 @@ interface TodoContextType {
   addStep: (taskId: string, title: string) => void;
   toggleStep: (taskId: string, stepId: string) => void;
   deleteStep: (taskId: string, stepId: string) => void;
+  setTaskNotes: (taskId: string, notes: string) => void;
+  setTaskDueDate: (taskId: string, dueDate: string | null) => void;
+  updateTask: (taskId: string, updates: Partial<Task>) => void;
   checkMidnightRollover: (customCurrentDate?: string | Date) => boolean;
   addList: (data: CreateTodoListInput) => TodoList;
   updateList: (id: string, updates: UpdateTodoListInput) => void;
@@ -438,6 +447,24 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     );
   }, []);
 
+  const setTaskNotes = useCallback((taskId: string, notes: string) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, notes } : t))
+    );
+  }, []);
+
+  const setTaskDueDate = useCallback((taskId: string, dueDate: string | null) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, dueDate } : t))
+    );
+  }, []);
+
+  const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
+    );
+  }, []);
+
   const addList = useCallback(
     (data: CreateTodoListInput): TodoList => {
       const trimmed = data.name.trim();
@@ -503,6 +530,9 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         addStep,
         toggleStep,
         deleteStep,
+        setTaskNotes,
+        setTaskDueDate,
+        updateTask,
         checkMidnightRollover,
         addList,
         updateList,

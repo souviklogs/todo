@@ -21,6 +21,61 @@ export function getStepProgress(steps?: Step[]): StepProgress | null {
   };
 }
 
+export function getLocalDateString(dateInput?: Date | string | number): string {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getTomorrowDateString(todayInput?: Date | string | number): string {
+  const date = todayInput ? new Date(todayInput) : new Date();
+  date.setDate(date.getDate() + 1);
+  return getLocalDateString(date);
+}
+
+export interface DueDateInfo {
+  label: string;
+  isOverdue: boolean;
+}
+
+export function formatDueDateBadge(
+  dueDate?: string | null,
+  todayStr?: string
+): DueDateInfo | null {
+  if (!dueDate) return null;
+  const currentToday = todayStr ?? getLocalDateString();
+  const isOverdue = dueDate < currentToday;
+
+  const [y, m, d] = currentToday.split('-').map(Number);
+  const tomorrowDate = new Date(y, m - 1, d + 1);
+  const tomorrowStr = getLocalDateString(tomorrowDate);
+
+  const yesterdayDate = new Date(y, m - 1, d - 1);
+  const yesterdayStr = getLocalDateString(yesterdayDate);
+
+  const [dueY, dueM, dueD] = dueDate.split('-').map(Number);
+  const dueObj = new Date(dueY, dueM - 1, dueD);
+  const monthName = dueObj.toLocaleDateString('en-US', { month: 'short' });
+  const currentYear = new Date(y, m - 1, d).getFullYear();
+  const shortDate = dueY === currentYear ? `${monthName} ${dueD}` : `${monthName} ${dueD}, ${dueY}`;
+
+  if (dueDate === currentToday) {
+    return { label: 'Due Today', isOverdue: false };
+  }
+  if (dueDate === tomorrowStr) {
+    return { label: 'Due Tomorrow', isOverdue: false };
+  }
+  if (dueDate === yesterdayStr) {
+    return { label: 'Overdue, Yesterday', isOverdue: true };
+  }
+  if (isOverdue) {
+    return { label: `Overdue, ${shortDate}`, isOverdue: true };
+  }
+  return { label: `Due ${shortDate}`, isOverdue: false };
+}
+
 export interface Task {
   id: string;
   title: string;
