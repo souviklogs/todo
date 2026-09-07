@@ -220,4 +220,143 @@ describe('App Component Integration Tests', () => {
       expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
     });
   });
+
+  describe('Slide-Over Navigation Drawer & List Switching', () => {
+    beforeEach(() => {
+      window.innerWidth = 375;
+      localStorage.clear();
+    });
+
+    it('opens navigation drawer when hamburger menu button is clicked', () => {
+      render(<App />);
+
+      expect(screen.queryByTestId('navigation-drawer')).not.toBeInTheDocument();
+      const menuButton = screen.getByRole('button', { name: /open navigation menu/i });
+      fireEvent.click(menuButton);
+
+      expect(screen.getByTestId('navigation-drawer')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /close navigation drawer/i })).toBeInTheDocument();
+    });
+
+    it('displays available lists with their active task counts', () => {
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      const drawer = screen.getByTestId('navigation-drawer');
+      expect(drawer).toBeInTheDocument();
+      expect(screen.getByTestId('list-item-tasks')).toHaveTextContent('Tasks');
+      expect(screen.getByTestId('list-count-tasks')).toHaveTextContent('2');
+      expect(screen.getByTestId('list-item-personal')).toHaveTextContent('Personal');
+      expect(screen.getByTestId('list-count-personal')).toHaveTextContent('1');
+      expect(screen.getByTestId('list-item-work')).toHaveTextContent('Work');
+      expect(screen.getByTestId('list-count-work')).toHaveTextContent('1');
+    });
+
+    it('switches active list when tapping a list and closes the drawer', () => {
+      render(<App />);
+
+      // Initial state shows Tasks
+      expect(screen.getByRole('heading', { level: 1, name: /Tasks/i })).toBeInTheDocument();
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+
+      // Open drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      // Tap 'Personal' list
+      const personalListItem = screen.getByTestId('list-item-personal');
+      fireEvent.click(personalListItem);
+
+      // Drawer should be dismissed
+      expect(screen.queryByTestId('navigation-drawer')).not.toBeInTheDocument();
+
+      // Active list view header and tasks should update to Personal
+      expect(screen.getByRole('heading', { level: 1, name: /Personal/i })).toBeInTheDocument();
+      expect(screen.getByText('Plan weekend trip')).toBeInTheDocument();
+      expect(screen.queryByText('Welcome to Tasks!')).not.toBeInTheDocument();
+    });
+
+    it('dismisses drawer when tapping the backdrop', () => {
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('navigation-drawer')).toBeInTheDocument();
+
+      const backdrop = screen.getByTestId('drawer-backdrop');
+      fireEvent.click(backdrop);
+
+      expect(screen.queryByTestId('navigation-drawer')).not.toBeInTheDocument();
+    });
+
+    it('dismisses drawer when tapping the close button', () => {
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('navigation-drawer')).toBeInTheDocument();
+
+      const closeBtn = screen.getByRole('button', { name: /close navigation drawer/i });
+      fireEvent.click(closeBtn);
+
+      expect(screen.queryByTestId('navigation-drawer')).not.toBeInTheDocument();
+    });
+
+    it('scopes newly added tasks to the active switched list and updates counts', () => {
+      render(<App />);
+
+      // Switch to Personal
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-personal'));
+
+      // Add a task in Personal
+      const input = screen.getByPlaceholderText('Add a task');
+      fireEvent.change(input, { target: { value: 'Buy birthday gift' } });
+      fireEvent.submit(input.closest('form')!);
+
+      expect(screen.getByText('Buy birthday gift')).toBeInTheDocument();
+
+      // Open drawer and verify Personal count updated to 2
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-personal')).toHaveTextContent('2');
+      expect(screen.getByTestId('list-count-tasks')).toHaveTextContent('2');
+
+      // Switch back to Tasks and verify 'Buy birthday gift' is not in Tasks list
+      fireEvent.click(screen.getByTestId('list-item-tasks'));
+      expect(screen.getByRole('heading', { level: 1, name: /Tasks/i })).toBeInTheDocument();
+      expect(screen.queryByText('Buy birthday gift')).not.toBeInTheDocument();
+      expect(screen.getByText('Welcome to Tasks!')).toBeInTheDocument();
+    });
+
+    it('dismisses drawer when Escape key is pressed', () => {
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('navigation-drawer')).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(screen.queryByTestId('navigation-drawer')).not.toBeInTheDocument();
+    });
+
+    it('decrements active task count in drawer when a task is completed', () => {
+      render(<App />);
+
+      // Tasks initially has 2 active tasks
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-tasks')).toHaveTextContent('2');
+
+      // Close drawer
+      fireEvent.click(screen.getByRole('button', { name: /close navigation drawer/i }));
+
+      // Complete one active task in Tasks
+      const taskCheckbox = screen.getByRole('checkbox', {
+        name: 'Welcome to Tasks!',
+      });
+      fireEvent.click(taskCheckbox);
+      expect(taskCheckbox).toBeChecked();
+
+      // Open drawer again and verify Tasks active count is now 1
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      expect(screen.getByTestId('list-count-tasks')).toHaveTextContent('1');
+    });
+  });
 });
