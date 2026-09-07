@@ -2,6 +2,7 @@ import React from 'react';
 import { useViewport } from './hooks/useViewport';
 import { DesktopGuard } from './components/DesktopGuard';
 import { MobileShell } from './components/MobileShell';
+import { TodoProvider } from './context/TodoContext';
 
 interface AppProps {
   viewportWidth?: number;
@@ -10,15 +11,17 @@ interface AppProps {
 export const App: React.FC<AppProps> = ({ viewportWidth }) => {
   const { isDesktop } = useViewport(viewportWidth);
 
-  if (isDesktop) {
-    return (
-      <DesktopGuard>
+  return (
+    <TodoProvider>
+      {isDesktop ? (
+        <DesktopGuard>
+          <MobileShell />
+        </DesktopGuard>
+      ) : (
         <MobileShell />
-      </DesktopGuard>
-    );
-  }
-
-  return <MobileShell />;
+      )}
+    </TodoProvider>
+  );
 };
 
 export default App;
