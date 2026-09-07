@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
+import { expireStaleMyDayTasks } from './context/TodoContext';
+import type { Task } from './types/todo';
 
 describe('App Component Integration Tests', () => {
   let originalInnerWidth: number;
@@ -1051,6 +1053,51 @@ describe('App Component Integration Tests', () => {
       // Open My Day and verify task-2 is listed
       fireEvent.click(screen.getByTestId('list-item-my-day'));
       expect(screen.getByText('Try adding a new task below')).toBeInTheDocument();
+    });
+
+    it('expireStaleMyDayTasks clears past-midnight and dateless tasks while preserving parent lists', () => {
+      const tasks: Task[] = [
+        {
+          id: '1',
+          title: 'Past task',
+          completed: false,
+          inMyDay: true,
+          myDayDate: '2026-08-30',
+          listId: 'tasks',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          title: 'Dateless task',
+          completed: false,
+          inMyDay: true,
+          myDayDate: null,
+          listId: 'tasks',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '3',
+          title: 'Today task',
+          completed: false,
+          inMyDay: true,
+          myDayDate: '2026-09-08',
+          listId: 'tasks',
+          createdAt: new Date().toISOString(),
+        },
+      ];
+
+      const { tasks: expired, changed } = expireStaleMyDayTasks(tasks, '2026-09-08');
+      expect(changed).toBe(true);
+      expect(expired[0].inMyDay).toBe(false);
+      expect(expired[0].myDayDate).toBeNull();
+      expect(expired[1].inMyDay).toBe(false);
+      expect(expired[1].myDayDate).toBeNull();
+      expect(expired[2].inMyDay).toBe(true);
+      expect(expired[2].myDayDate).toBe('2026-09-08');
+
+      // Subsequent call when all are fresh reports changed = false
+      const rerun = expireStaleMyDayTasks(expired, '2026-09-08');
+      expect(rerun.changed).toBe(false);
     });
   });
 });

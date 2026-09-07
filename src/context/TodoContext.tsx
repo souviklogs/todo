@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+} from 'react';
 import type { Task, TodoList, CreateTodoListInput, UpdateTodoListInput } from '../types/todo';
 import { DEFAULT_THEME_ID } from '../constants/theme';
 
@@ -136,20 +144,28 @@ function saveToStorage<T>(key: string, data: T): void {
   }
 }
 
+export function expireStaleMyDayTasks(
+  tasks: Task[],
+  todayStr: string = getLocalDateString()
+): { tasks: Task[]; changed: boolean } {
+  let changed = false;
+  const updated = tasks.map((t) => {
+    if (t.inMyDay && (!t.myDayDate || t.myDayDate < todayStr)) {
+      changed = true;
+      return { ...t, inMyDay: false, myDayDate: null };
+    }
+    return t;
+  });
+  return { tasks: changed ? updated : tasks, changed };
+}
+
 export function loadStoredTasks(customCurrentDate?: string | Date): Task[] {
   const loaded = loadFromStorage(STORAGE_KEY_TASKS, DEFAULT_TASKS, (data) => Array.isArray(data));
   const todayStr =
     typeof customCurrentDate === 'string'
       ? customCurrentDate
       : getLocalDateString(customCurrentDate);
-  let changed = false;
-  const migrated = loaded.map((t) => {
-    if (t.inMyDay && t.myDayDate && t.myDayDate < todayStr) {
-      changed = true;
-      return { ...t, inMyDay: false, myDayDate: null };
-    }
-    return t;
-  });
+  const { tasks: migrated, changed } = expireStaleMyDayTasks(loaded, todayStr);
   if (changed) {
     saveStoredTasks(migrated);
   }
@@ -201,8 +217,6 @@ interface TodoContextType {
   deleteTask: (id: string) => void;
   toggleImportant: (id: string) => void;
   toggleMyDay: (id: string) => void;
-  addToMyDay: (id: string) => void;
-  removeFromMyDay: (id: string) => void;
   checkMidnightRollover: (customCurrentDate?: string | Date) => boolean;
   addList: (data: CreateTodoListInput) => TodoList;
   updateList: (id: string, updates: UpdateTodoListInput) => void;
@@ -238,26 +252,22 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     return loaded.find((l) => l.id === DEFAULT_LIST.id) ?? loaded[0] ?? DEFAULT_LIST;
   });
 
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+
   const checkMidnightRollover = useCallback((customCurrentDate?: string | Date): boolean => {
     const todayStr =
       typeof customCurrentDate === 'string'
         ? customCurrentDate
         : getLocalDateString(customCurrentDate);
 
-    let hasRolledOver = false;
-    setTasks((prev) => {
-      let changed = false;
-      const updated = prev.map((t) => {
-        if (t.inMyDay && t.myDayDate && t.myDayDate < todayStr) {
-          changed = true;
-          hasRolledOver = true;
-          return { ...t, inMyDay: false, myDayDate: null };
-        }
-        return t;
-      });
-      return changed ? updated : prev;
-    });
-    return hasRolledOver;
+    const { tasks: updated, changed } = expireStaleMyDayTasks(tasksRef.current, todayStr);
+    if (changed) {
+      tasksRef.current = updated;
+      setTasks(updated);
+      return true;
+    }
+    return false;
   }, []);
 
   // Periodic and visibility-based midnight rollover check
@@ -303,11 +313,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
 
   const currentTasks = useMemo(() => {
     const todayStr = getLocalDateString();
-    if (
-      currentList.id === MY_DAY_LIST.id ||
-      currentList.id === 'myday' ||
-      currentList.id === 'my-day'
-    ) {
+    if (currentList.id === MY_DAY_LIST.id) {
       return tasks.filter((t) => Boolean(t.inMyDay) && (!t.myDayDate || t.myDayDate >= todayStr));
     }
     if (currentList.id === IMPORTANT_LIST.id) {
@@ -322,10 +328,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
       if (!trimmed) return;
 
       const isImportantView = currentList.id === IMPORTANT_LIST.id;
-      const isMyDayView =
-        currentList.id === MY_DAY_LIST.id ||
-        currentList.id === 'myday' ||
-        currentList.id === 'my-day';
+      const isMyDayView = currentList.id === MY_DAY_LIST.id;
       const targetListId =
         listId ?? (isImportantView || isMyDayView ? DEFAULT_LIST.id : currentList.id);
 
@@ -374,19 +377,6 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
           myDayDate: nextInMyDay ? todayStr : null,
         };
       })
-    );
-  }, []);
-
-  const addToMyDay = useCallback((id: string) => {
-    const todayStr = getLocalDateString();
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, inMyDay: true, myDayDate: todayStr } : t))
-    );
-  }, []);
-
-  const removeFromMyDay = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, inMyDay: false, myDayDate: null } : t))
     );
   }, []);
 
@@ -444,8 +434,6 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         deleteTask,
         toggleImportant,
         toggleMyDay,
-        addToMyDay,
-        removeFromMyDay,
         checkMidnightRollover,
         addList,
         updateList,
@@ -464,5 +452,3 @@ export const useTodoContext = (): TodoContextType => {
   }
   return context;
 };
-
-export const useTodoStore = useTodoContext;

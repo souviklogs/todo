@@ -25,8 +25,6 @@ const THEME_ALIASES: Record<string, string> = {
   orange: 'amber',
   gray: 'slate',
   daytime: 'sunrise',
-  'my-day': 'sunrise',
-  myday: 'sunrise',
 };
 
 export const THEME_GRADIENTS: Record<string, string> = {

@@ -35,7 +35,7 @@ export const renderListIcon = (
   } else if (iconName === 'Star') {
     colorClass = isSelected ? 'text-rose-600 dark:text-rose-400' : 'text-rose-500 dark:text-rose-400';
   } else if (iconName === 'Sun') {
-    colorClass = isSelected ? 'text-amber-500 dark:text-amber-400' : 'text-amber-500 dark:text-amber-400';
+    colorClass = isSelected ? 'text-amber-600 dark:text-amber-400' : 'text-amber-500 dark:text-amber-400';
   } else if (isSelected) {
     colorClass = 'text-blue-600 dark:text-blue-400';
   } else {
