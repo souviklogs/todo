@@ -1624,4 +1624,237 @@ describe('App Component Integration Tests', () => {
       });
     });
   });
+
+  describe('Docked Mobile Quick-Add Bar with Shortcut Chips (Issue #10)', () => {
+    it('renders docked quick-add bar with all shortcut chips at the bottom of the viewport', () => {
+      render(<App />);
+
+      const bar = screen.getByTestId('quick-add-bar');
+      expect(bar).toBeInTheDocument();
+      expect(bar).toHaveClass('sticky');
+      expect(bar).toHaveClass('bottom-0');
+
+      const chipDueToday = screen.getByTestId('chip-due-today');
+      const chipDueTomorrow = screen.getByTestId('chip-due-tomorrow');
+      const chipStar = screen.getByTestId('chip-star');
+      const chipMyDay = screen.getByTestId('chip-my-day');
+
+      expect(chipDueToday).toBeInTheDocument();
+      expect(chipDueTomorrow).toBeInTheDocument();
+      expect(chipStar).toBeInTheDocument();
+      expect(chipMyDay).toBeInTheDocument();
+
+      expect(chipDueToday).toHaveAttribute('data-active', 'false');
+      expect(chipDueTomorrow).toHaveAttribute('data-active', 'false');
+      expect(chipStar).toHaveAttribute('data-active', 'false');
+      expect(chipMyDay).toHaveAttribute('data-active', 'false');
+
+      expect(chipDueToday).toHaveAttribute('aria-pressed', 'false');
+      expect(chipDueTomorrow).toHaveAttribute('aria-pressed', 'false');
+      expect(chipStar).toHaveAttribute('aria-pressed', 'false');
+      expect(chipMyDay).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('toggles active state of chips when tapped and enforces mutual exclusivity on due dates', () => {
+      render(<App />);
+
+      const chipDueToday = screen.getByTestId('chip-due-today');
+      const chipDueTomorrow = screen.getByTestId('chip-due-tomorrow');
+      const chipStar = screen.getByTestId('chip-star');
+      const chipMyDay = screen.getByTestId('chip-my-day');
+
+      // Toggle Due Today on and off
+      fireEvent.click(chipDueToday);
+      expect(chipDueToday).toHaveAttribute('data-active', 'true');
+      expect(chipDueToday).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.click(chipDueToday);
+      expect(chipDueToday).toHaveAttribute('data-active', 'false');
+      expect(chipDueToday).toHaveAttribute('aria-pressed', 'false');
+
+      // Due date mutual exclusivity: Today then Tomorrow
+      fireEvent.click(chipDueToday);
+      expect(chipDueToday).toHaveAttribute('data-active', 'true');
+      fireEvent.click(chipDueTomorrow);
+      expect(chipDueToday).toHaveAttribute('data-active', 'false');
+      expect(chipDueTomorrow).toHaveAttribute('data-active', 'true');
+      fireEvent.click(chipDueTomorrow);
+      expect(chipDueTomorrow).toHaveAttribute('data-active', 'false');
+
+      // Toggle Star on and off
+      fireEvent.click(chipStar);
+      expect(chipStar).toHaveAttribute('data-active', 'true');
+      fireEvent.click(chipStar);
+      expect(chipStar).toHaveAttribute('data-active', 'false');
+
+      // Toggle My Day on and off
+      fireEvent.click(chipMyDay);
+      expect(chipMyDay).toHaveAttribute('data-active', 'true');
+      fireEvent.click(chipMyDay);
+      expect(chipMyDay).toHaveAttribute('data-active', 'false');
+    });
+
+    it('creates task with Due Today shortcut chip and resets input bar and chips', () => {
+      render(<App />);
+
+      const input = screen.getByPlaceholderText('Add a task');
+      const chipDueToday = screen.getByTestId('chip-due-today');
+      const submitBtn = screen.getByRole('button', { name: /Add task/i });
+
+      fireEvent.change(input, { target: { value: 'Buy concert tickets' } });
+      fireEvent.click(chipDueToday);
+      expect(chipDueToday).toHaveAttribute('data-active', 'true');
+
+      fireEvent.click(submitBtn);
+
+      // Input and chips should reset
+      expect(input).toHaveValue('');
+      expect(chipDueToday).toHaveAttribute('data-active', 'false');
+
+      // Task created with Due Today badge
+      expect(screen.getByText('Buy concert tickets')).toBeInTheDocument();
+      const taskCard = screen.getByText('Buy concert tickets').closest('li')!;
+      expect(within(taskCard).getByText(/Due Today/i)).toBeInTheDocument();
+    });
+
+    it('creates task with Due Tomorrow shortcut chip and resets input bar and chips', () => {
+      render(<App />);
+
+      const input = screen.getByPlaceholderText('Add a task');
+      const chipDueTomorrow = screen.getByTestId('chip-due-tomorrow');
+
+      fireEvent.change(input, { target: { value: 'Schedule car service' } });
+      fireEvent.click(chipDueTomorrow);
+      expect(chipDueTomorrow).toHaveAttribute('data-active', 'true');
+
+      fireEvent.submit(input.closest('form')!);
+
+      expect(input).toHaveValue('');
+      expect(chipDueTomorrow).toHaveAttribute('data-active', 'false');
+
+      expect(screen.getByText('Schedule car service')).toBeInTheDocument();
+      const taskCard = screen.getByText('Schedule car service').closest('li')!;
+      expect(within(taskCard).getByText(/Due Tomorrow/i)).toBeInTheDocument();
+    });
+
+    it('creates task with Star shortcut chip and marks it important in list and Important view', () => {
+      render(<App />);
+
+      const input = screen.getByPlaceholderText('Add a task');
+      const chipStar = screen.getByTestId('chip-star');
+
+      fireEvent.change(input, { target: { value: 'High priority bugfix' } });
+      fireEvent.click(chipStar);
+      expect(chipStar).toHaveAttribute('data-active', 'true');
+
+      fireEvent.submit(input.closest('form')!);
+
+      expect(input).toHaveValue('');
+      expect(chipStar).toHaveAttribute('data-active', 'false');
+
+      expect(screen.getByText('High priority bugfix')).toBeInTheDocument();
+      const taskCard = screen.getByText('High priority bugfix').closest('li')!;
+      expect(within(taskCard).getByRole('button', { name: /star/i })).toHaveAttribute('data-starred', 'true');
+
+      // Navigate to Important smart list
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-important'));
+      expect(screen.getByText('High priority bugfix')).toBeInTheDocument();
+    });
+
+    it('creates task with Add to My Day shortcut chip and marks it in My Day view', () => {
+      render(<App />);
+
+      const input = screen.getByPlaceholderText('Add a task');
+      const chipMyDay = screen.getByTestId('chip-my-day');
+
+      fireEvent.change(input, { target: { value: 'Morning meditation' } });
+      fireEvent.click(chipMyDay);
+      expect(chipMyDay).toHaveAttribute('data-active', 'true');
+
+      fireEvent.submit(input.closest('form')!);
+
+      expect(input).toHaveValue('');
+      expect(chipMyDay).toHaveAttribute('data-active', 'false');
+
+      expect(screen.getByText('Morning meditation')).toBeInTheDocument();
+      const taskCard = screen.getByText('Morning meditation').closest('li')!;
+      expect(within(taskCard).getByRole('button', { name: /my day/i })).toHaveAttribute('data-my-day', 'true');
+
+      // Navigate to My Day smart list
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-my-day'));
+      expect(screen.getByText('Morning meditation')).toBeInTheDocument();
+    });
+
+    it('creates task with multiple shortcut chips combined (Star + Due Tomorrow + Add to My Day)', () => {
+      render(<App />);
+
+      const input = screen.getByPlaceholderText('Add a task');
+      const chipStar = screen.getByTestId('chip-star');
+      const chipDueTomorrow = screen.getByTestId('chip-due-tomorrow');
+      const chipMyDay = screen.getByTestId('chip-my-day');
+
+      fireEvent.change(input, { target: { value: 'Launch feature announcement' } });
+      fireEvent.click(chipStar);
+      fireEvent.click(chipDueTomorrow);
+      fireEvent.click(chipMyDay);
+
+      expect(chipStar).toHaveAttribute('data-active', 'true');
+      expect(chipDueTomorrow).toHaveAttribute('data-active', 'true');
+      expect(chipMyDay).toHaveAttribute('data-active', 'true');
+
+      fireEvent.submit(input.closest('form')!);
+
+      // All chips reset
+      expect(input).toHaveValue('');
+      expect(chipStar).toHaveAttribute('data-active', 'false');
+      expect(chipDueTomorrow).toHaveAttribute('data-active', 'false');
+      expect(chipMyDay).toHaveAttribute('data-active', 'false');
+
+      // Task created with all 3 attributes
+      expect(screen.getByText('Launch feature announcement')).toBeInTheDocument();
+      const taskCard = screen.getByText('Launch feature announcement').closest('li')!;
+      expect(within(taskCard).getByRole('button', { name: /star/i })).toHaveAttribute('data-starred', 'true');
+      expect(within(taskCard).getByRole('button', { name: /my day/i })).toHaveAttribute('data-my-day', 'true');
+      expect(within(taskCard).getByText(/Due Tomorrow/i)).toBeInTheDocument();
+
+      // Verify presence in Important
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-important'));
+      expect(screen.getByText('Launch feature announcement')).toBeInTheDocument();
+
+      // Verify presence in My Day
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByTestId('list-item-my-day'));
+      expect(screen.getByText('Launch feature announcement')).toBeInTheDocument();
+    });
+
+    it('persists shortcut chip task attributes across simulated page reload in localStorage', () => {
+      const { unmount } = render(<App />);
+
+      const input = screen.getByPlaceholderText('Add a task');
+      const chipStar = screen.getByTestId('chip-star');
+      const chipDueToday = screen.getByTestId('chip-due-today');
+      const chipMyDay = screen.getByTestId('chip-my-day');
+
+      fireEvent.change(input, { target: { value: 'Persisted chip task' } });
+      fireEvent.click(chipStar);
+      fireEvent.click(chipDueToday);
+      fireEvent.click(chipMyDay);
+
+      fireEvent.submit(input.closest('form')!);
+      expect(screen.getByText('Persisted chip task')).toBeInTheDocument();
+
+      unmount();
+
+      // Remount App
+      render(<App />);
+
+      expect(screen.getByText('Persisted chip task')).toBeInTheDocument();
+      const reloadedCard = screen.getByText('Persisted chip task').closest('li')!;
+      expect(within(reloadedCard).getByRole('button', { name: /star/i })).toHaveAttribute('data-starred', 'true');
+      expect(within(reloadedCard).getByRole('button', { name: /my day/i })).toHaveAttribute('data-my-day', 'true');
+      expect(within(reloadedCard).getByText(/Due Today/i)).toBeInTheDocument();
+    });
+  });
 });
