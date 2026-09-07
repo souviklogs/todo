@@ -16,11 +16,13 @@ import type {
 } from '../types/todo';
 import { getLocalDateString } from '../types/todo';
 import { DEFAULT_THEME_ID } from '../constants/theme';
+import { triggerCompletionSensory } from '../utils/sensory';
 
 export { getLocalDateString };
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
+export const STORAGE_KEY_SOUND_ENABLED = 'todo_sound_enabled';
 
 export const MY_DAY_LIST: TodoList = {
   id: 'my-day',
@@ -230,6 +232,9 @@ interface TodoContextType {
   addList: (data: CreateTodoListInput) => TodoList;
   updateList: (id: string, updates: UpdateTodoListInput) => void;
   deleteList: (id: string) => void;
+  soundEnabled: boolean;
+  setSoundEnabled: (enabled: boolean) => void;
+  toggleSound: () => void;
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -239,6 +244,7 @@ interface TodoProviderProps {
   initialTasks?: Task[];
   initialLists?: TodoList[];
   initialCurrentList?: TodoList;
+  initialSoundEnabled?: boolean;
 }
 
 export const TodoProvider: React.FC<TodoProviderProps> = ({
@@ -246,6 +252,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   initialTasks,
   initialLists,
   initialCurrentList,
+  initialSoundEnabled,
 }) => {
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (initialTasks) return initialTasks;
@@ -261,6 +268,17 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     return loaded.find((l) => l.id === DEFAULT_LIST.id) ?? loaded[0] ?? DEFAULT_LIST;
   });
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof initialSoundEnabled === 'boolean') return initialSoundEnabled;
+    return loadFromStorage(STORAGE_KEY_SOUND_ENABLED, true, (data) => typeof data === 'boolean');
+  });
+
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((prev) => !prev);
+  }, []);
 
   const selectedTask = useMemo(() => {
     if (!selectedTaskId) return null;
@@ -326,6 +344,11 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     saveStoredLists(lists);
   }, [lists]);
 
+  // Synchronize soundEnabled to localStorage whenever soundEnabled changes
+  useEffect(() => {
+    saveToStorage(STORAGE_KEY_SOUND_ENABLED, soundEnabled);
+  }, [soundEnabled]);
+
   const currentTasks = useMemo(() => {
     const todayStr = getLocalDateString();
     if (currentList.id === MY_DAY_LIST.id) {
@@ -377,6 +400,11 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   );
 
   const toggleTask = useCallback((id: string) => {
+    const target = tasksRef.current.find((t) => t.id === id);
+    if (target && !target.completed) {
+      triggerCompletionSensory({ soundEnabled: soundEnabledRef.current });
+    }
+
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
@@ -428,6 +456,12 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   }, []);
 
   const toggleStep = useCallback((taskId: string, stepId: string) => {
+    const targetTask = tasksRef.current.find((t) => t.id === taskId);
+    const targetStep = targetTask?.steps?.find((s) => s.id === stepId);
+    if (targetStep && !targetStep.completed) {
+      triggerCompletionSensory({ soundEnabled: soundEnabledRef.current });
+    }
+
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id !== taskId) return t;
@@ -536,6 +570,9 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         addList,
         updateList,
         deleteList,
+        soundEnabled,
+        setSoundEnabled,
+        toggleSound,
       }}
     >
       {children}
