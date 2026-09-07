@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check, Trash2, Star, Sun } from 'lucide-react';
 import type { Task } from '../types/todo';
+import { getStepProgress } from '../types/todo';
 
 interface TaskItemProps {
   task: Task;
@@ -8,6 +9,7 @@ interface TaskItemProps {
   onDelete: (id: string) => void;
   onToggleImportant?: (id: string) => void;
   onToggleMyDay?: (id: string) => void;
+  onSelect?: (id: string) => void;
 }
 
 export const TaskItem: React.FC<TaskItemProps> = ({
@@ -16,21 +18,27 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   onDelete,
   onToggleImportant,
   onToggleMyDay,
+  onSelect,
 }) => {
   const isStarred = Boolean(task.isImportant);
   const isInMyDay = Boolean(task.inMyDay);
+  const stepProgress = getStepProgress(task.steps);
 
   return (
     <li
       data-testid={`task-item-${task.id}`}
-      className="flex items-center gap-3 p-3.5 bg-white dark:bg-neutral-800 rounded-xl border border-slate-200/80 dark:border-neutral-700/80 shadow-xs hover:border-slate-300 dark:hover:border-neutral-600 transition-all group"
+      onClick={() => onSelect?.(task.id)}
+      className="flex items-center gap-3 p-3.5 bg-white dark:bg-neutral-800 rounded-xl border border-slate-200/80 dark:border-neutral-700/80 shadow-xs hover:border-slate-300 dark:hover:border-neutral-600 transition-all group cursor-pointer"
     >
       <button
         type="button"
         role="checkbox"
         aria-checked={task.completed}
         aria-label={task.title}
-        onClick={() => onToggle(task.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle(task.id);
+        }}
         className={`w-5 h-5 rounded-full flex items-center justify-center border-2 transition-colors flex-shrink-0 cursor-pointer ${
           task.completed
             ? 'bg-blue-600 border-blue-600 text-white'
@@ -40,15 +48,25 @@ export const TaskItem: React.FC<TaskItemProps> = ({
         {task.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
       </button>
 
-      <span
-        className={`flex-1 text-sm font-medium transition-all select-text break-words ${
-          task.completed
-            ? 'line-through text-slate-400 dark:text-neutral-500'
-            : 'text-slate-800 dark:text-neutral-100'
-        }`}
-      >
-        {task.title}
-      </span>
+      <div className="flex-1 min-w-0 flex flex-col justify-center">
+        <span
+          className={`text-sm font-medium transition-all select-text break-words ${
+            task.completed
+              ? 'line-through text-slate-400 dark:text-neutral-500'
+              : 'text-slate-800 dark:text-neutral-100'
+          }`}
+        >
+          {task.title}
+        </span>
+        {stepProgress && (
+          <span
+            data-testid={`task-steps-progress-${task.id}`}
+            className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5"
+          >
+            {stepProgress.label}
+          </span>
+        )}
+      </div>
 
       <div className="flex items-center gap-1 flex-shrink-0">
         <button

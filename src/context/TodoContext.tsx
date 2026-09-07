@@ -212,11 +212,17 @@ interface TodoContextType {
   lists: TodoList[];
   currentList: TodoList;
   setCurrentList: (list: TodoList) => void;
+  selectedTaskId: string | null;
+  setSelectedTaskId: (id: string | null) => void;
+  selectedTask: Task | null;
   addTask: (title: string, listId?: string) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
   toggleImportant: (id: string) => void;
   toggleMyDay: (id: string) => void;
+  addStep: (taskId: string, title: string) => void;
+  toggleStep: (taskId: string, stepId: string) => void;
+  deleteStep: (taskId: string, stepId: string) => void;
   checkMidnightRollover: (customCurrentDate?: string | Date) => boolean;
   addList: (data: CreateTodoListInput) => TodoList;
   updateList: (id: string, updates: UpdateTodoListInput) => void;
@@ -251,6 +257,12 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     const loaded = initialLists ?? loadStoredLists();
     return loaded.find((l) => l.id === DEFAULT_LIST.id) ?? loaded[0] ?? DEFAULT_LIST;
   });
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  const selectedTask = useMemo(() => {
+    if (!selectedTaskId) return null;
+    return tasks.find((t) => t.id === selectedTaskId) ?? null;
+  }, [tasks, selectedTaskId]);
 
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
@@ -357,6 +369,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
 
   const deleteTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    setSelectedTaskId((prev) => (prev === id ? null : prev));
   }, []);
 
   const toggleImportant = useCallback((id: string) => {
@@ -375,6 +388,51 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
           ...t,
           inMyDay: nextInMyDay,
           myDayDate: nextInMyDay ? todayStr : null,
+        };
+      })
+    );
+  }, []);
+
+  const addStep = useCallback((taskId: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const newStep = {
+      id: `step-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title: trimmed,
+      completed: false,
+    };
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          steps: [...(t.steps ?? []), newStep],
+        };
+      })
+    );
+  }, []);
+
+  const toggleStep = useCallback((taskId: string, stepId: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          steps: (t.steps ?? []).map((s) =>
+            s.id === stepId ? { ...s, completed: !s.completed } : s
+          ),
+        };
+      })
+    );
+  }, []);
+
+  const deleteStep = useCallback((taskId: string, stepId: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          steps: (t.steps ?? []).filter((s) => s.id !== stepId),
         };
       })
     );
@@ -413,6 +471,11 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
       return prev.filter((l) => l.id !== id);
     });
     setTasks((prev) => prev.filter((t) => t.listId !== id));
+    setSelectedTaskId((prev) => {
+      if (!prev) return null;
+      const targetTask = tasksRef.current.find((t) => t.id === prev);
+      return targetTask?.listId === id ? null : prev;
+    });
     setCurrentList((prev) => {
       if (prev.id === id) {
         return DEFAULT_LIST;
@@ -429,11 +492,17 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         lists,
         currentList,
         setCurrentList,
+        selectedTaskId,
+        setSelectedTaskId,
+        selectedTask,
         addTask,
         toggleTask,
         deleteTask,
         toggleImportant,
         toggleMyDay,
+        addStep,
+        toggleStep,
+        deleteStep,
         checkMidnightRollover,
         addList,
         updateList,

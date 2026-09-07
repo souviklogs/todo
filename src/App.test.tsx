@@ -2,7 +2,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
 import { expireStaleMyDayTasks } from './context/TodoContext';
-import type { Task } from './types/todo';
+import { getStepProgress, type Task } from './types/todo';
 
 describe('App Component Integration Tests', () => {
   let originalInnerWidth: number;
@@ -1098,6 +1098,303 @@ describe('App Component Integration Tests', () => {
       // Subsequent call when all are fresh reports changed = false
       const rerun = expireStaleMyDayTasks(expired, '2026-09-08');
       expect(rerun.changed).toBe(false);
+    });
+  });
+
+  describe('Task Detail View & Subtasks (Steps) (Issue #8)', () => {
+    it('tapping a task in the list opens the detail view with back button navigation', () => {
+      render(<App />);
+
+      // Tap on the first task ('Welcome to Tasks!')
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+
+      // Detail view is displayed
+      const detailView = screen.getByTestId('task-detail-view');
+      expect(detailView).toBeInTheDocument();
+      expect(screen.getByTestId('detail-back-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('detail-task-title')).toHaveTextContent('Welcome to Tasks!');
+
+      // Click the back button
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+
+      // Detail view closes
+      expect(screen.queryByTestId('task-detail-view')).not.toBeInTheDocument();
+      expect(screen.getByTestId('task-list')).toBeInTheDocument();
+    });
+
+    it('pressing Escape key dismisses the detail view', () => {
+      render(<App />);
+
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      expect(screen.getByTestId('task-detail-view')).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByTestId('task-detail-view')).not.toBeInTheDocument();
+    });
+
+    it('users can add multiple subtask steps via the input inside the detail view', () => {
+      render(<App />);
+
+      // Add a new task 'Grocery shopping'
+      const taskInput = screen.getByPlaceholderText(/Add a task/i);
+      fireEvent.change(taskInput, { target: { value: 'Grocery shopping' } });
+      fireEvent.submit(taskInput.closest('form')!);
+
+      // Tap the newly created task to open detail view
+      fireEvent.click(screen.getByText('Grocery shopping'));
+      expect(screen.getByTestId('task-detail-view')).toBeInTheDocument();
+
+      const stepInput = screen.getByTestId('add-step-input');
+      const addStepBtn = screen.getByTestId('add-step-btn');
+
+      // Add Step 1: Apples
+      fireEvent.change(stepInput, { target: { value: 'Apples' } });
+      fireEvent.click(addStepBtn);
+      expect(screen.getByText('Apples')).toBeInTheDocument();
+
+      // Add Step 2: Milk via Enter key
+      fireEvent.change(stepInput, { target: { value: 'Milk' } });
+      fireEvent.submit(stepInput.closest('form')!);
+      expect(screen.getByText('Milk')).toBeInTheDocument();
+
+      // Add Step 3: Bread
+      fireEvent.change(stepInput, { target: { value: 'Bread' } });
+      fireEvent.click(addStepBtn);
+      expect(screen.getByText('Bread')).toBeInTheDocument();
+
+      // Summary in detail view shows '0 of 3 steps'
+      expect(screen.getByTestId('detail-steps-progress')).toHaveTextContent('0 of 3 steps');
+    });
+
+    it('subtasks can be checked and unchecked independently', () => {
+      render(<App />);
+
+      // Add task with 3 steps
+      const taskInput = screen.getByPlaceholderText(/Add a task/i);
+      fireEvent.change(taskInput, { target: { value: 'Launch project' } });
+      fireEvent.submit(taskInput.closest('form')!);
+
+      fireEvent.click(screen.getByText('Launch project'));
+
+      const stepInput = screen.getByTestId('add-step-input');
+      const addStepBtn = screen.getByTestId('add-step-btn');
+
+      fireEvent.change(stepInput, { target: { value: 'Write code' } });
+      fireEvent.click(addStepBtn);
+      fireEvent.change(stepInput, { target: { value: 'Run tests' } });
+      fireEvent.click(addStepBtn);
+      fireEvent.change(stepInput, { target: { value: 'Deploy' } });
+      fireEvent.click(addStepBtn);
+
+      const stepItems = screen.getByTestId('detail-steps-list').children;
+      expect(stepItems).toHaveLength(3);
+
+      // Check step 1 ('Write code')
+      const checkBtn1 = within(stepItems[0] as HTMLElement).getByRole('checkbox');
+      expect(checkBtn1).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(checkBtn1);
+      expect(checkBtn1).toHaveAttribute('aria-checked', 'true');
+
+      // Step 2 & 3 remain unchecked
+      const checkBtn2 = within(stepItems[1] as HTMLElement).getByRole('checkbox');
+      const checkBtn3 = within(stepItems[2] as HTMLElement).getByRole('checkbox');
+      expect(checkBtn2).toHaveAttribute('aria-checked', 'false');
+      expect(checkBtn3).toHaveAttribute('aria-checked', 'false');
+
+      // Progress in detail view is '1 of 3 steps'
+      expect(screen.getByTestId('detail-steps-progress')).toHaveTextContent('1 of 3 steps');
+
+      // Check step 2 ('Run tests')
+      fireEvent.click(checkBtn2);
+      expect(checkBtn2).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('detail-steps-progress')).toHaveTextContent('2 of 3 steps');
+
+      // Uncheck step 1 ('Write code')
+      fireEvent.click(checkBtn1);
+      expect(checkBtn1).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByTestId('detail-steps-progress')).toHaveTextContent('1 of 3 steps');
+    });
+
+    it('subtasks can be deleted', () => {
+      render(<App />);
+
+      const taskInput = screen.getByPlaceholderText(/Add a task/i);
+      fireEvent.change(taskInput, { target: { value: 'Clean house' } });
+      fireEvent.submit(taskInput.closest('form')!);
+
+      fireEvent.click(screen.getByText('Clean house'));
+
+      const stepInput = screen.getByTestId('add-step-input');
+      const addStepBtn = screen.getByTestId('add-step-btn');
+
+      fireEvent.change(stepInput, { target: { value: 'Kitchen' } });
+      fireEvent.click(addStepBtn);
+      fireEvent.change(stepInput, { target: { value: 'Living room' } });
+      fireEvent.click(addStepBtn);
+
+      expect(screen.getByText('Kitchen')).toBeInTheDocument();
+      expect(screen.getByText('Living room')).toBeInTheDocument();
+
+      // Delete 'Kitchen' step
+      const deleteKitchenBtn = screen.getByRole('button', { name: /Delete step "Kitchen"/i });
+      fireEvent.click(deleteKitchenBtn);
+
+      expect(screen.queryByText('Kitchen')).not.toBeInTheDocument();
+      expect(screen.getByText('Living room')).toBeInTheDocument();
+      expect(screen.getByTestId('detail-steps-progress')).toHaveTextContent('0 of 1 step');
+    });
+
+    it('task card in list view displays subtask progress indicator (e.g., 1 of 3 steps) when subtasks exist', () => {
+      render(<App />);
+
+      // Preloaded demo task-1 ('Welcome to Tasks!') has 1 step 'Tap to see details' (0 of 1 step)
+      expect(screen.getByTestId('task-steps-progress-task-1')).toHaveTextContent('0 of 1 step');
+
+      // Add a new task 'Trip planning'
+      const taskInput = screen.getByPlaceholderText(/Add a task/i);
+      fireEvent.change(taskInput, { target: { value: 'Trip planning' } });
+      fireEvent.submit(taskInput.closest('form')!);
+
+      // Initially no subtask indicator on 'Trip planning' card
+      expect(screen.queryByText(/of.*steps?/i)).not.toBeNull(); // task-1 has one, but 'Trip planning' doesn't
+
+      // Open detail view for 'Trip planning'
+      fireEvent.click(screen.getByText('Trip planning'));
+
+      const stepInput = screen.getByTestId('add-step-input');
+      const addStepBtn = screen.getByTestId('add-step-btn');
+
+      // Add 3 steps
+      fireEvent.change(stepInput, { target: { value: 'Book flight' } });
+      fireEvent.click(addStepBtn);
+      fireEvent.change(stepInput, { target: { value: 'Hotel reservation' } });
+      fireEvent.click(addStepBtn);
+      fireEvent.change(stepInput, { target: { value: 'Pack bags' } });
+      fireEvent.click(addStepBtn);
+
+      // Check 1 of the 3 steps
+      const flightCheckbox = screen.getByRole('checkbox', { name: /Book flight/i });
+      fireEvent.click(flightCheckbox);
+
+      // Navigate back to list view
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+
+      // The task card displays '1 of 3 steps'
+      expect(screen.getByText('1 of 3 steps')).toBeInTheDocument();
+
+      // Re-open and check second step
+      fireEvent.click(screen.getByText('Trip planning'));
+      const hotelCheckbox = screen.getByRole('checkbox', { name: /Hotel reservation/i });
+      fireEvent.click(hotelCheckbox);
+
+      // Navigate back
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+
+      // The task card now displays '2 of 3 steps'
+      expect(screen.getByText('2 of 3 steps')).toBeInTheDocument();
+    });
+
+    it('deleting all subtasks removes the progress indicator from the task card in list view', () => {
+      render(<App />);
+
+      // Open detail view for demo task-1 which has 1 step
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      expect(screen.getByTestId('task-detail-view')).toBeInTheDocument();
+
+      // Delete the step 'Tap to see details'
+      const deleteStepBtn = screen.getByRole('button', { name: /Delete step "Tap to see details"/i });
+      fireEvent.click(deleteStepBtn);
+
+      // Navigate back
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+
+      // Progress indicator is removed from task-1 card
+      expect(screen.queryByTestId('task-steps-progress-task-1')).not.toBeInTheDocument();
+    });
+
+    it('persists subtasks and their completed states across simulated page reload in localStorage', () => {
+      const { unmount } = render(<App />);
+
+      // Add task with subtasks
+      const taskInput = screen.getByPlaceholderText(/Add a task/i);
+      fireEvent.change(taskInput, { target: { value: 'Persisted task' } });
+      fireEvent.submit(taskInput.closest('form')!);
+
+      fireEvent.click(screen.getByText('Persisted task'));
+
+      const stepInput = screen.getByTestId('add-step-input');
+      const addStepBtn = screen.getByTestId('add-step-btn');
+
+      fireEvent.change(stepInput, { target: { value: 'Step A' } });
+      fireEvent.click(addStepBtn);
+      fireEvent.change(stepInput, { target: { value: 'Step B' } });
+      fireEvent.click(addStepBtn);
+
+      const stepACheckbox = screen.getByRole('checkbox', { name: /Step A/i });
+      fireEvent.click(stepACheckbox);
+
+      fireEvent.click(screen.getByTestId('detail-back-btn'));
+      expect(screen.getByText('1 of 2 steps')).toBeInTheDocument();
+
+      unmount();
+
+      // Remount App (simulating page reload from localStorage)
+      render(<App />);
+
+      expect(screen.getByText('Persisted task')).toBeInTheDocument();
+      expect(screen.getByText('1 of 2 steps')).toBeInTheDocument();
+
+      // Open detail view and verify state
+      fireEvent.click(screen.getByText('Persisted task'));
+      expect(screen.getByTestId('task-detail-view')).toBeInTheDocument();
+      expect(screen.getByText('Step A')).toBeInTheDocument();
+      expect(screen.getByText('Step B')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: /Step A/i })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('checkbox', { name: /Step B/i })).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('allows toggling task completion and deleting task from within detail view', () => {
+      render(<App />);
+
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      expect(screen.getByTestId('task-detail-view')).toBeInTheDocument();
+
+      // Toggle task completion from inside detail view
+      const toggleTaskBtn = screen.getByTestId('detail-toggle-task');
+      expect(toggleTaskBtn).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(toggleTaskBtn);
+      expect(toggleTaskBtn).toHaveAttribute('aria-checked', 'true');
+
+      // Delete task from inside detail view
+      const deleteTaskBtn = screen.getByTestId('detail-delete-task-btn');
+      fireEvent.click(deleteTaskBtn);
+
+      // Detail view closes and task is removed from list
+      expect(screen.queryByTestId('task-detail-view')).not.toBeInTheDocument();
+      expect(screen.queryByText('Welcome to Tasks!')).not.toBeInTheDocument();
+    });
+
+    it('getStepProgress computes progress stats and formatted label correctly', () => {
+      expect(getStepProgress(undefined)).toBeNull();
+      expect(getStepProgress([])).toBeNull();
+
+      expect(getStepProgress([{ id: '1', title: 'Step 1', completed: false }])).toEqual({
+        total: 1,
+        completed: 0,
+        label: '0 of 1 step',
+      });
+
+      expect(
+        getStepProgress([
+          { id: '1', title: 'Step 1', completed: true },
+          { id: '2', title: 'Step 2', completed: false },
+          { id: '3', title: 'Step 3', completed: true },
+        ])
+      ).toEqual({
+        total: 3,
+        completed: 2,
+        label: '2 of 3 steps',
+      });
     });
   });
 });
