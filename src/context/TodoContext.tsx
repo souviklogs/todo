@@ -78,61 +78,61 @@ export const DEFAULT_TASKS: Task[] = [
   },
 ];
 
-export function loadStoredTasks(): Task[] {
-  if (typeof window === 'undefined') return DEFAULT_TASKS;
+function loadFromStorage<T>(
+  key: string,
+  fallback: T,
+  validator?: (data: unknown) => boolean
+): T {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_TASKS);
+    const raw = localStorage.getItem(key);
     if (raw === null) {
-      return DEFAULT_TASKS;
+      return fallback;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (validator && !validator(parsed)) {
+      return fallback;
+    }
+    return parsed;
   } catch (err) {
-    console.error('Failed to parse stored tasks:', err);
-    return DEFAULT_TASKS;
+    console.error(`Failed to parse stored ${key}:`, err);
+    return fallback;
   }
+}
+
+function saveToStorage<T>(key: string, data: T): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (err) {
+    console.error(`Failed to save ${key} to localStorage:`, err);
+  }
+}
+
+export function loadStoredTasks(): Task[] {
+  return loadFromStorage(STORAGE_KEY_TASKS, DEFAULT_TASKS, (data) => Array.isArray(data));
 }
 
 export function saveStoredTasks(tasks: Task[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(tasks));
-  } catch (err) {
-    console.error('Failed to save tasks to localStorage:', err);
-  }
+  saveToStorage(STORAGE_KEY_TASKS, tasks);
 }
 
 export function loadStoredLists(): TodoList[] {
-  if (typeof window === 'undefined') return DEFAULT_LISTS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_LISTS);
-    if (raw === null) {
-      return DEFAULT_LISTS;
-    }
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
-    }
-    return DEFAULT_LISTS;
-  } catch (err) {
-    console.error('Failed to parse stored lists:', err);
-    return DEFAULT_LISTS;
-  }
+  return loadFromStorage(
+    STORAGE_KEY_LISTS,
+    DEFAULT_LISTS,
+    (data) => Array.isArray(data) && data.length > 0
+  );
 }
 
 export function saveStoredLists(lists: TodoList[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY_LISTS, JSON.stringify(lists));
-  } catch (err) {
-    console.error('Failed to save lists to localStorage:', err);
-  }
+  saveToStorage(STORAGE_KEY_LISTS, lists);
 }
 
 interface TodoContextType {
   tasks: Task[];
   currentTasks: Task[];
   lists: TodoList[];
-  setLists: React.Dispatch<React.SetStateAction<TodoList[]>>;
   currentList: TodoList;
   setCurrentList: (list: TodoList) => void;
   addTask: (title: string, listId?: string) => void;
@@ -159,7 +159,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     if (initialTasks) return initialTasks;
     return loadStoredTasks();
   });
-  const [lists, setLists] = useState<TodoList[]>(() => {
+  const [lists] = useState<TodoList[]>(() => {
     if (initialLists) return initialLists;
     return loadStoredLists();
   });
@@ -180,7 +180,7 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   }, [lists]);
 
   const currentTasks = useMemo(
-    () => tasks.filter((t) => (t.listId ?? 'tasks') === currentList.id),
+    () => tasks.filter((t) => (t.listId ?? DEFAULT_LIST.id) === currentList.id),
     [tasks, currentList.id]
   );
 
@@ -217,7 +217,6 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         tasks,
         currentTasks,
         lists,
-        setLists,
         currentList,
         setCurrentList,
         addTask,

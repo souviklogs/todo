@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { X, ListTodo, User, Briefcase, Folder, Sun, Star } from 'lucide-react';
-import { useTodoContext } from '../context/TodoContext';
+import { useTodoContext, DEFAULT_LIST } from '../context/TodoContext';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -35,6 +35,20 @@ export const renderListIcon = (iconName: string, isSelected: boolean = false) =>
 
 export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose }) => {
   const { tasks, lists, currentList, setCurrentList } = useTodoContext();
+
+  const activeCountsByList = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const list of lists) {
+      counts[list.id] = 0;
+    }
+    for (const task of tasks) {
+      if (!task.completed) {
+        const taskListId = task.listId ?? DEFAULT_LIST.id;
+        counts[taskListId] = (counts[taskListId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [tasks, lists]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -98,10 +112,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
             Lists
           </div>
           {lists.map((list) => {
-            const activeCount = tasks.filter((t) => {
-              const taskListId = t.listId ?? 'tasks';
-              return taskListId === list.id && !t.completed;
-            }).length;
+            const activeCount = activeCountsByList[list.id] ?? 0;
             const isSelected = currentList.id === list.id;
 
             return (
