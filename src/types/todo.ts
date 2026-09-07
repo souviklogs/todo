@@ -115,3 +115,10 @@ export interface CreateTodoListInput {
 }
 
 export type UpdateTodoListInput = Partial<CreateTodoListInput>;
+
+export interface AddTaskOptions {
+  listId?: string;
+  isImportant?: boolean;
+  inMyDay?: boolean;
+  dueDate?: string | null;
+}

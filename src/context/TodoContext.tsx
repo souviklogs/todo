@@ -12,11 +12,13 @@ import type {
   TodoList,
   CreateTodoListInput,
   UpdateTodoListInput,
+  AddTaskOptions,
 } from '../types/todo';
 import { getLocalDateString } from '../types/todo';
 import { DEFAULT_THEME_ID } from '../constants/theme';
 
 export { getLocalDateString };
+export type { AddTaskOptions };
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
@@ -215,7 +217,7 @@ interface TodoContextType {
   selectedTaskId: string | null;
   setSelectedTaskId: (id: string | null) => void;
   selectedTask: Task | null;
-  addTask: (title: string, listId?: string) => void;
+  addTask: (title: string, optionsOrListId?: string | AddTaskOptions) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
   toggleImportant: (id: string) => void;
@@ -337,22 +339,34 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
   }, [tasks, currentList.id]);
 
   const addTask = useCallback(
-    (title: string, listId?: string) => {
+    (title: string, optionsOrListId?: string | AddTaskOptions) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+
+      const options: AddTaskOptions =
+        typeof optionsOrListId === 'string'
+          ? { listId: optionsOrListId }
+          : (optionsOrListId ?? {});
 
       const isImportantView = currentList.id === IMPORTANT_LIST.id;
       const isMyDayView = currentList.id === MY_DAY_LIST.id;
       const targetListId =
-        listId ?? (isImportantView || isMyDayView ? DEFAULT_LIST.id : currentList.id);
+        options.listId ??
+        (isImportantView || isMyDayView ? DEFAULT_LIST.id : currentList.id);
+
+      const isImportant =
+        options.isImportant !== undefined ? options.isImportant : isImportantView;
+      const inMyDay =
+        options.inMyDay !== undefined ? options.inMyDay : isMyDayView;
 
       const newTask: Task = {
         id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         title: trimmed,
         completed: false,
-        isImportant: isImportantView,
-        inMyDay: isMyDayView,
-        myDayDate: isMyDayView ? getLocalDateString() : null,
+        isImportant,
+        inMyDay,
+        myDayDate: inMyDay ? getLocalDateString() : null,
+        dueDate: options.dueDate ?? null,
         steps: [],
         listId: targetListId,
         createdAt: new Date().toISOString(),
