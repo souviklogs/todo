@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, ListTodo, User, Briefcase, Folder, Sun, Star, Plus, Pencil } from 'lucide-react';
+import { X, ListTodo, User, Briefcase, Folder, Sun, Star, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
 import {
   useTodoContext,
   DEFAULT_LIST,
@@ -61,8 +61,17 @@ export const renderListIcon = (
 };
 
 export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose }) => {
-  const { tasks, lists, currentList, setCurrentList, addList, updateList, deleteList } =
-    useTodoContext();
+  const {
+    tasks,
+    lists,
+    currentList,
+    setCurrentList,
+    addList,
+    updateList,
+    deleteList,
+    soundEnabled,
+    toggleSound,
+  } = useTodoContext();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
@@ -229,6 +238,52 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
               </div>
             );
           })}
+        </div>
+
+        {/* Settings Section */}
+        <div
+          data-testid="drawer-settings-section"
+          className="px-3 py-3 border-t border-slate-100 dark:border-neutral-800"
+        >
+          <div className="px-3 pb-2 text-[11px] font-semibold tracking-wider text-slate-400 dark:text-neutral-500 uppercase">
+            Settings
+          </div>
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-800/50 transition-colors">
+            <label
+              htmlFor="sound-toggle-btn"
+              className="flex items-center gap-2.5 cursor-pointer select-none"
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              ) : (
+                <VolumeX className="w-4 h-4 text-slate-400 dark:text-neutral-500" />
+              )}
+              <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">
+                Sound effects
+              </span>
+            </label>
+            <button
+              id="sound-toggle-btn"
+              type="button"
+              role="switch"
+              aria-checked={soundEnabled}
+              aria-label="Sound effects"
+              data-testid="sound-toggle-btn"
+              onClick={toggleSound}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                soundEnabled
+                  ? 'bg-blue-600 dark:bg-blue-500'
+                  : 'bg-slate-300 dark:bg-neutral-700'
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* New List Action Button */}

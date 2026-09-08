@@ -1,7 +1,13 @@
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
-import { expireStaleMyDayTasks } from './context/TodoContext';
+import { expireStaleMyDayTasks, STORAGE_KEY_SOUND_ENABLED } from './context/TodoContext';
+import {
+  resetAudioContext,
+  ROOT_CHIME_FREQUENCY,
+  OCTAVE_CHIME_FREQUENCY,
+  HAPTIC_FEEDBACK_PATTERN,
+} from './utils/sensory';
 import {
   getStepProgress,
   formatDueDateBadge,
@@ -2023,6 +2029,274 @@ describe('App Component Integration Tests', () => {
       expect(within(completedSection).getByText('Welcome to Tasks!')).toBeInTheDocument();
       expect(within(completedSection).getByText('Tap the circle to mark a task complete')).toBeInTheDocument();
       expect(within(screen.getByTestId('task-list')).getByText('Try adding a new task below')).toBeInTheDocument();
+    });
+  });
+
+  describe('Sensory Audio Chime & Mobile Haptics (Issue #12)', () => {
+    let mockOscillators: Array<{
+      type: string;
+      frequency: { setValueAtTime: ReturnType<typeof vi.fn> };
+      connect: ReturnType<typeof vi.fn>;
+      start: ReturnType<typeof vi.fn>;
+      stop: ReturnType<typeof vi.fn>;
+    }>;
+    let mockGains: Array<{
+      gain: {
+        setValueAtTime: ReturnType<typeof vi.fn>;
+        exponentialRampToValueAtTime: ReturnType<typeof vi.fn>;
+      };
+      connect: ReturnType<typeof vi.fn>;
+    }>;
+    let mockAudioContextInstance: {
+      currentTime: number;
+      state: string;
+      resume: ReturnType<typeof vi.fn>;
+      destination: Record<string, unknown>;
+      createOscillator: ReturnType<typeof vi.fn>;
+      createGain: ReturnType<typeof vi.fn>;
+    };
+    let mockAudioContextConstructor: ReturnType<typeof vi.fn>;
+    let mockVibrate: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      window.innerWidth = 375;
+      localStorage.clear();
+      resetAudioContext();
+
+      mockOscillators = [];
+      mockGains = [];
+
+      mockVibrate = vi.fn();
+      Object.defineProperty(navigator, 'vibrate', {
+        value: mockVibrate,
+        configurable: true,
+        writable: true,
+      });
+
+      mockAudioContextInstance = {
+        currentTime: 0,
+        state: 'running',
+        resume: vi.fn().mockResolvedValue(undefined),
+        destination: {},
+        createOscillator: vi.fn().mockImplementation(() => {
+          const osc = {
+            type: '',
+            frequency: { setValueAtTime: vi.fn() },
+            connect: vi.fn(),
+            start: vi.fn(),
+            stop: vi.fn(),
+          };
+          mockOscillators.push(osc);
+          return osc;
+        }),
+        createGain: vi.fn().mockImplementation(() => {
+          const gain = {
+            gain: {
+              setValueAtTime: vi.fn(),
+              exponentialRampToValueAtTime: vi.fn(),
+            },
+            connect: vi.fn(),
+          };
+          mockGains.push(gain);
+          return gain;
+        }),
+      };
+
+      mockAudioContextConstructor = vi.fn().mockImplementation(function () {
+        return mockAudioContextInstance;
+      });
+      window.AudioContext = mockAudioContextConstructor as unknown as typeof AudioContext;
+    });
+
+    afterEach(() => {
+      resetAudioContext();
+      delete (window as { AudioContext?: unknown }).AudioContext;
+      delete (navigator as { vibrate?: unknown }).vibrate;
+    });
+
+    it('synthesizes signature two-tone completion chime and triggers mobile vibration on task completion', () => {
+      render(<App />);
+
+      const activeCheckbox = screen.getByRole('checkbox', { name: 'Welcome to Tasks!' });
+      fireEvent.click(activeCheckbox);
+
+      // Haptic feedback invoked with exact signature pattern [15, 30, 15]
+      expect(mockVibrate).toHaveBeenCalledTimes(1);
+      expect(mockVibrate).toHaveBeenCalledWith(HAPTIC_FEEDBACK_PATTERN);
+
+      // Web Audio API AudioContext instantiated and used to generate two-tone chime
+      expect(mockAudioContextConstructor).toHaveBeenCalled();
+      expect(mockAudioContextInstance.createOscillator).toHaveBeenCalledTimes(2);
+      expect(mockAudioContextInstance.createGain).toHaveBeenCalledTimes(2);
+
+      // Oscillators configured with sine wave
+      expect(mockOscillators[0].type).toBe('sine');
+      expect(mockOscillators[1].type).toBe('sine');
+
+      // Tone 1: Root chime frequency (587.33 Hz) starting at currentTime 0
+      expect(mockOscillators[0].frequency.setValueAtTime).toHaveBeenCalledWith(
+        ROOT_CHIME_FREQUENCY,
+        0
+      );
+      expect(mockOscillators[0].start).toHaveBeenCalledWith(0);
+      expect(mockOscillators[0].stop).toHaveBeenCalledWith(0.25);
+      expect(mockGains[0].gain.exponentialRampToValueAtTime).toHaveBeenCalledWith(0.0001, 0.25);
+
+      // Tone 2: Octave chime frequency (1174.66 Hz) delayed by 0.1s
+      expect(mockOscillators[1].frequency.setValueAtTime).toHaveBeenCalledWith(
+        OCTAVE_CHIME_FREQUENCY,
+        0.1
+      );
+      expect(mockOscillators[1].start).toHaveBeenCalledWith(0.1);
+      expect(mockOscillators[1].stop.mock.calls[0][0]).toBeCloseTo(0.45);
+      expect(mockGains[1].gain.exponentialRampToValueAtTime.mock.calls[0][0]).toBeCloseTo(0.0001);
+      expect(mockGains[1].gain.exponentialRampToValueAtTime.mock.calls[0][1]).toBeCloseTo(0.45);
+    });
+
+    it('triggers completion chime and mobile vibration on subtask (step) completion in detail view', () => {
+      render(<App />);
+
+      // Open detail view of task-1
+      fireEvent.click(screen.getByText('Welcome to Tasks!'));
+      expect(screen.getByTestId('task-detail-view')).toBeInTheDocument();
+
+      mockVibrate.mockClear();
+      mockAudioContextInstance.createOscillator.mockClear();
+      mockAudioContextInstance.createGain.mockClear();
+
+      // Check subtask step-1-1
+      const stepCheckbox = screen.getByTestId('toggle-step-step-1-1');
+      fireEvent.click(stepCheckbox);
+
+      expect(mockVibrate).toHaveBeenCalledTimes(1);
+      expect(mockVibrate).toHaveBeenCalledWith(HAPTIC_FEEDBACK_PATTERN);
+      expect(mockAudioContextInstance.createOscillator).toHaveBeenCalledTimes(2);
+      expect(mockAudioContextInstance.createGain).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not trigger audio chime or mobile vibration when unchecking a completed task or step', () => {
+      render(<App />);
+
+      // Open completed tasks accordion
+      const accordionBtn = screen.getByTestId('completed-accordion-toggle');
+      fireEvent.click(accordionBtn);
+
+      mockVibrate.mockClear();
+      mockAudioContextInstance.createOscillator.mockClear();
+      mockAudioContextInstance.createGain.mockClear();
+
+      // Uncheck completed task
+      const completedCheckbox = within(screen.getByTestId('completed-section')).getByRole('checkbox', {
+        name: 'Tap the circle to mark a task complete',
+      });
+      fireEvent.click(completedCheckbox);
+
+      // Neither vibrate nor audio chime should trigger on uncheck
+      expect(mockVibrate).not.toHaveBeenCalled();
+      expect(mockAudioContextInstance.createOscillator).not.toHaveBeenCalled();
+    });
+
+    it('navigation drawer includes sound effects toggle setting with active state and sound icon', () => {
+      render(<App />);
+
+      // Open navigation drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      // Verify settings section exists in drawer
+      expect(screen.getByTestId('drawer-settings-section')).toBeInTheDocument();
+
+      // Verify sound toggle switch button
+      const soundToggle = screen.getByRole('switch', { name: /sound effects/i });
+      expect(soundToggle).toBeInTheDocument();
+      expect(soundToggle).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByText('Sound effects')).toBeInTheDocument();
+
+      // Verify clicking the label toggles the switch cleanly without double-triggering
+      fireEvent.click(screen.getByText('Sound effects'));
+      expect(soundToggle).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(screen.getByText('Sound effects'));
+      expect(soundToggle).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('toggling sound effects off mutes audio chime on task completion while maintaining haptic vibration', () => {
+      render(<App />);
+
+      // Open navigation drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      // Toggle sound off
+      const soundToggle = screen.getByRole('switch', { name: /sound effects/i });
+      fireEvent.click(soundToggle);
+      expect(soundToggle).toHaveAttribute('aria-checked', 'false');
+
+      // Close drawer
+      fireEvent.click(screen.getByTestId('close-drawer-btn'));
+
+      mockVibrate.mockClear();
+      mockAudioContextInstance.createOscillator.mockClear();
+      mockAudioContextInstance.createGain.mockClear();
+
+      // Complete active task
+      const activeCheckbox = screen.getByRole('checkbox', { name: 'Welcome to Tasks!' });
+      fireEvent.click(activeCheckbox);
+
+      // Vibration still occurs
+      expect(mockVibrate).toHaveBeenCalledTimes(1);
+      expect(mockVibrate).toHaveBeenCalledWith(HAPTIC_FEEDBACK_PATTERN);
+
+      // But AudioContext was NOT invoked (sound is muted)
+      expect(mockAudioContextInstance.createOscillator).not.toHaveBeenCalled();
+    });
+
+    it('persists sound preference across simulated page reload in localStorage', () => {
+      const { unmount } = render(<App />);
+
+      // Open drawer and mute sound effects
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      const soundToggle = screen.getByRole('switch', { name: /sound effects/i });
+      fireEvent.click(soundToggle);
+
+      expect(localStorage.getItem(STORAGE_KEY_SOUND_ENABLED)).toBe('false');
+
+      unmount();
+
+      // Re-mount app simulating browser reload
+      render(<App />);
+
+      // Verify toggle setting is still muted in drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      const reloadedToggle = screen.getByRole('switch', { name: /sound effects/i });
+      expect(reloadedToggle).toHaveAttribute('aria-checked', 'false');
+
+      // Close drawer and complete a task -> Audio should be muted
+      fireEvent.click(screen.getByTestId('close-drawer-btn'));
+      mockAudioContextInstance.createOscillator.mockClear();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Welcome to Tasks!' }));
+      expect(mockAudioContextInstance.createOscillator).not.toHaveBeenCalled();
+
+      // Re-enable sound
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByRole('switch', { name: /sound effects/i }));
+      expect(screen.getByRole('switch', { name: /sound effects/i })).toHaveAttribute('aria-checked', 'true');
+      expect(localStorage.getItem(STORAGE_KEY_SOUND_ENABLED)).toBe('true');
+
+      // Complete another task -> Audio chime plays now
+      fireEvent.click(screen.getByTestId('close-drawer-btn'));
+      mockAudioContextInstance.createOscillator.mockClear();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Try adding a new task below' }));
+      expect(mockAudioContextInstance.createOscillator).toHaveBeenCalledTimes(2);
+    });
+
+    it('sensory audio engine handles absent AudioContext or unsupported vibration gracefully without crashing', () => {
+      delete (window as { AudioContext?: unknown }).AudioContext;
+      delete (navigator as { vibrate?: unknown }).vibrate;
+      resetAudioContext();
+
+      render(<App />);
+
+      expect(() => {
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Welcome to Tasks!' }));
+      }).not.toThrow();
     });
   });
 });
