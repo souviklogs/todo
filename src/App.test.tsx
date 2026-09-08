@@ -17,6 +17,7 @@ import {
   validateBackupData,
   parseAndValidateBackup,
   createBackupPayload,
+  ensureSystemLists,
 } from './utils/backup';
 import {
   getStepProgress,
@@ -2575,6 +2576,13 @@ describe('App Component Integration Tests', () => {
       expect(payload.version).toBe(1);
       expect(payload.lists.length).toBe(3); // system lists ensured
       expect(payload.tasks).toEqual([]);
+
+      // ensureSystemLists places My Day, Tasks, and Important first even with custom lists
+      const rawLists = [
+        { id: 'custom-1', name: 'Custom 1', icon: '📁', colorTheme: 'blue', isSystem: false },
+      ];
+      const ensured = ensureSystemLists(rawLists);
+      expect(ensured.map((l) => l.id)).toEqual(['my-day', 'tasks', 'important', 'custom-1']);
     });
   });
 });

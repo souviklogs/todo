@@ -20,60 +20,22 @@ import { DEFAULT_THEME_ID } from '../constants/theme';
 import { triggerCompletionSensory } from '../utils/sensory';
 import {
   createBackupPayload,
+  ensureSystemLists,
   parseAndValidateBackup,
   validateBackupData,
 } from '../utils/backup';
+import {
+  MY_DAY_LIST,
+  DEFAULT_LIST,
+  IMPORTANT_LIST,
+  DEFAULT_LISTS,
+} from '../constants/lists';
 
-export { getLocalDateString };
-
+export { getLocalDateString, MY_DAY_LIST, DEFAULT_LIST, IMPORTANT_LIST, DEFAULT_LISTS };
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
 export const STORAGE_KEY_SOUND_ENABLED = 'todo_sound_enabled';
-
-export const MY_DAY_LIST: TodoList = {
-  id: 'my-day',
-  name: 'My Day',
-  icon: 'Sun',
-  colorTheme: 'sunrise',
-  isSystem: true,
-};
-
-export const DEFAULT_LIST: TodoList = {
-  id: 'tasks',
-  name: 'Tasks',
-  icon: 'ListTodo',
-  colorTheme: DEFAULT_THEME_ID,
-  isSystem: true,
-};
-
-export const IMPORTANT_LIST: TodoList = {
-  id: 'important',
-  name: 'Important',
-  icon: 'Star',
-  colorTheme: 'rose',
-  isSystem: true,
-};
-
-export const DEFAULT_LISTS: TodoList[] = [
-  MY_DAY_LIST,
-  DEFAULT_LIST,
-  IMPORTANT_LIST,
-  {
-    id: 'personal',
-    name: 'Personal',
-    icon: 'User',
-    colorTheme: 'purple',
-    isSystem: false,
-  },
-  {
-    id: 'work',
-    name: 'Work',
-    icon: 'Briefcase',
-    colorTheme: 'emerald',
-    isSystem: false,
-  },
-];
 
 export const DEFAULT_TASKS: Task[] = [
   {
@@ -192,24 +154,7 @@ export function loadStoredLists(): TodoList[] {
     DEFAULT_LISTS,
     (data) => Array.isArray(data) && data.length > 0
   );
-  if (!loaded.some((l) => l.id === MY_DAY_LIST.id)) {
-    loaded.unshift(MY_DAY_LIST);
-  } else {
-    const myDayIdx = loaded.findIndex((l) => l.id === MY_DAY_LIST.id);
-    if (myDayIdx > 0) {
-      const [myDayItem] = loaded.splice(myDayIdx, 1);
-      loaded.unshift(myDayItem);
-    }
-  }
-  if (!loaded.some((l) => l.id === IMPORTANT_LIST.id)) {
-    const tasksIdx = loaded.findIndex((l) => l.id === DEFAULT_LIST.id);
-    if (tasksIdx !== -1) {
-      loaded.splice(tasksIdx + 1, 0, IMPORTANT_LIST);
-    } else {
-      loaded.push(IMPORTANT_LIST);
-    }
-  }
-  return loaded;
+  return ensureSystemLists(loaded);
 }
 
 export function saveStoredLists(lists: TodoList[]): void {

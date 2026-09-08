@@ -1,65 +1,36 @@
 import type { Task, TodoList, Step, BackupData } from '../types/todo';
 import { getLocalDateString } from '../types/todo';
+import { MY_DAY_LIST, DEFAULT_LIST, IMPORTANT_LIST } from '../constants/lists';
 
-export const SYSTEM_MY_DAY_LIST: TodoList = {
-  id: 'my-day',
-  name: 'My Day',
-  icon: 'Sun',
-  colorTheme: 'sunrise',
-  isSystem: true,
-};
-
-export const SYSTEM_TASKS_LIST: TodoList = {
-  id: 'tasks',
-  name: 'Tasks',
-  icon: 'ListTodo',
-  colorTheme: 'blue',
-  isSystem: true,
-};
-
-export const SYSTEM_IMPORTANT_LIST: TodoList = {
-  id: 'important',
-  name: 'Important',
-  icon: 'Star',
-  colorTheme: 'rose',
-  isSystem: true,
-};
+// Backwards-compatible aliases
+export const SYSTEM_MY_DAY_LIST: TodoList = MY_DAY_LIST;
+export const SYSTEM_TASKS_LIST: TodoList = DEFAULT_LIST;
+export const SYSTEM_IMPORTANT_LIST: TodoList = IMPORTANT_LIST;
 
 export type BackupValidationResult =
   | { valid: true; data: BackupData }
   | { valid: false; error: string };
 
 /**
- * Ensures required system lists (My Day, Tasks, Important) are preserved in order.
+ * Ensures required system lists (My Day, Tasks, Important) are preserved in canonical order.
  */
 export function ensureSystemLists(lists: TodoList[]): TodoList[] {
   const result = [...lists];
 
-  // Ensure My Day is present at the front
-  if (!result.some((l) => l.id === SYSTEM_MY_DAY_LIST.id)) {
-    result.unshift(SYSTEM_MY_DAY_LIST);
-  } else {
-    const myDayIdx = result.findIndex((l) => l.id === SYSTEM_MY_DAY_LIST.id);
-    if (myDayIdx > 0) {
-      const [myDayItem] = result.splice(myDayIdx, 1);
-      result.unshift(myDayItem);
-    }
-  }
+  // 1. Ensure My Day is at index 0
+  const myDayIdx = result.findIndex((l) => l.id === MY_DAY_LIST.id);
+  const myDayItem = myDayIdx !== -1 ? result.splice(myDayIdx, 1)[0] : MY_DAY_LIST;
+  result.unshift({ ...myDayItem, isSystem: true });
 
-  // Ensure Important is present
-  if (!result.some((l) => l.id === SYSTEM_IMPORTANT_LIST.id)) {
-    const tasksIdx = result.findIndex((l) => l.id === SYSTEM_TASKS_LIST.id);
-    if (tasksIdx !== -1) {
-      result.splice(tasksIdx + 1, 0, SYSTEM_IMPORTANT_LIST);
-    } else {
-      result.push(SYSTEM_IMPORTANT_LIST);
-    }
-  }
+  // 2. Ensure Tasks is at index 1
+  const tasksIdx = result.findIndex((l) => l.id === DEFAULT_LIST.id);
+  const tasksItem = tasksIdx !== -1 ? result.splice(tasksIdx, 1)[0] : DEFAULT_LIST;
+  result.splice(1, 0, { ...tasksItem, isSystem: true });
 
-  // Ensure Tasks is present
-  if (!result.some((l) => l.id === SYSTEM_TASKS_LIST.id)) {
-    result.splice(1, 0, SYSTEM_TASKS_LIST);
-  }
+  // 3. Ensure Important is at index 2
+  const importantIdx = result.findIndex((l) => l.id === IMPORTANT_LIST.id);
+  const importantItem = importantIdx !== -1 ? result.splice(importantIdx, 1)[0] : IMPORTANT_LIST;
+  result.splice(2, 0, { ...importantItem, isSystem: true });
 
   return result;
 }
