@@ -13,12 +13,19 @@ import type {
   CreateTodoListInput,
   UpdateTodoListInput,
   AddTaskOptions,
+  BackupData,
 } from '../types/todo';
 import { getLocalDateString } from '../types/todo';
 import { DEFAULT_THEME_ID } from '../constants/theme';
 import { triggerCompletionSensory } from '../utils/sensory';
+import {
+  createBackupPayload,
+  parseAndValidateBackup,
+  validateBackupData,
+} from '../utils/backup';
 
 export { getLocalDateString };
+
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
@@ -235,6 +242,8 @@ interface TodoContextType {
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
   toggleSound: () => void;
+  exportBackup: () => BackupData;
+  importBackup: (backupInput: string | unknown) => { success: boolean; error?: string };
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -551,6 +560,46 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     });
   }, []);
 
+  const exportBackup = useCallback((): BackupData => {
+    return createBackupPayload(lists, tasks);
+  }, [lists, tasks]);
+
+  const importBackup = useCallback(
+    (backupInput: string | unknown): { success: boolean; error?: string } => {
+      const validation =
+        typeof backupInput === 'string'
+          ? parseAndValidateBackup(backupInput)
+          : validateBackupData(backupInput);
+
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+
+      const { lists: importedLists, tasks: importedTasks } = validation.data;
+
+      // Rehydrate lists and tasks in state
+      setLists(importedLists);
+      setTasks(importedTasks);
+      tasksRef.current = importedTasks;
+
+      // Direct synchronization to localStorage
+      saveStoredLists(importedLists);
+      saveStoredTasks(importedTasks);
+
+      // Reset selected task if open
+      setSelectedTaskId(null);
+
+      // Ensure active currentList is valid
+      setCurrentList((prev) => {
+        const found = importedLists.find((l) => l.id === prev.id);
+        return found ?? DEFAULT_LIST;
+      });
+
+      return { success: true };
+    },
+    []
+  );
+
   return (
     <TodoContext.Provider
       value={{
@@ -579,6 +628,8 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         soundEnabled,
         setSoundEnabled,
         toggleSound,
+        exportBackup,
+        importBackup,
       }}
     >
       {children}

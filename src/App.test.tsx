@@ -1,13 +1,23 @@
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
-import { expireStaleMyDayTasks, STORAGE_KEY_SOUND_ENABLED } from './context/TodoContext';
+import {
+  expireStaleMyDayTasks,
+  STORAGE_KEY_SOUND_ENABLED,
+  STORAGE_KEY_TASKS,
+  STORAGE_KEY_LISTS,
+} from './context/TodoContext';
 import {
   resetAudioContext,
   ROOT_CHIME_FREQUENCY,
   OCTAVE_CHIME_FREQUENCY,
   HAPTIC_FEEDBACK_PATTERN,
 } from './utils/sensory';
+import {
+  validateBackupData,
+  parseAndValidateBackup,
+  createBackupPayload,
+} from './utils/backup';
 import {
   getStepProgress,
   formatDueDateBadge,
@@ -2299,4 +2309,273 @@ describe('App Component Integration Tests', () => {
       }).not.toThrow();
     });
   });
+
+  describe('JSON Backup Export & Import (Issue #13)', () => {
+    let createObjectURLMock: ReturnType<typeof vi.fn>;
+    let revokeObjectURLMock: ReturnType<typeof vi.fn>;
+    let clickMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      createObjectURLMock = vi.fn().mockReturnValue('blob:http://localhost/mock-backup-url');
+      revokeObjectURLMock = vi.fn();
+      window.URL.createObjectURL = createObjectURLMock as unknown as typeof window.URL.createObjectURL;
+      window.URL.revokeObjectURL = revokeObjectURLMock as unknown as typeof window.URL.revokeObjectURL;
+      clickMock = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      clickMock.mockRestore();
+      delete (window.URL as { createObjectURL?: unknown }).createObjectURL;
+      delete (window.URL as { revokeObjectURL?: unknown }).revokeObjectURL;
+    });
+
+    it('navigation drawer includes Backup & Restore panel with Export Backup and Import Backup options', () => {
+      render(<App />);
+
+      // Open navigation drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      // Verify Backup & Restore panel exists in drawer settings
+      const panel = screen.getByTestId('backup-restore-panel');
+      expect(panel).toBeInTheDocument();
+      expect(within(panel).getByText('Backup & Restore')).toBeInTheDocument();
+
+      // Verify Export Backup button
+      const exportBtn = screen.getByRole('button', { name: /export backup/i });
+      expect(exportBtn).toBeInTheDocument();
+      expect(exportBtn).toHaveAttribute('data-testid', 'export-backup-btn');
+
+      // Verify Import Backup button and file input
+      const importBtn = screen.getByRole('button', { name: /import backup/i });
+      expect(importBtn).toBeInTheDocument();
+      expect(importBtn).toHaveAttribute('data-testid', 'import-backup-btn');
+
+      const fileInput = screen.getByTestId('import-backup-input');
+      expect(fileInput).toBeInTheDocument();
+      expect(fileInput).toHaveAttribute('type', 'file');
+      expect(fileInput).toHaveAttribute('accept', '.json,application/json');
+    });
+
+    it('exporting triggers browser download of clean formatted JSON file containing all lists and tasks', async () => {
+      render(<App />);
+
+      // Open drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      // Click Export Backup
+      const exportBtn = screen.getByRole('button', { name: /export backup/i });
+      fireEvent.click(exportBtn);
+
+      // Verify URL.createObjectURL called with Blob
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      const [exportedBlob] = createObjectURLMock.mock.calls[0] as [Blob];
+      expect(exportedBlob).toBeInstanceOf(Blob);
+      expect(exportedBlob.type).toBe('application/json');
+
+      // Verify downloaded JSON content
+      const blobText = await exportedBlob.text();
+      const parsed = JSON.parse(blobText);
+      expect(parsed).toHaveProperty('version', 1);
+      expect(parsed).toHaveProperty('exportedAt');
+      expect(Array.isArray(parsed.lists)).toBe(true);
+      expect(Array.isArray(parsed.tasks)).toBe(true);
+      expect(parsed.lists.length).toBeGreaterThan(0);
+      expect(parsed.tasks.length).toBeGreaterThan(0);
+
+      // Verify click was triggered on anchor element
+      expect(clickMock).toHaveBeenCalled();
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:http://localhost/mock-backup-url');
+    });
+
+    it('importing validates JSON structure and rehydrates lists and tasks in localStorage and state', async () => {
+      render(<App />);
+
+      // Open drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      const backupData = {
+        version: 1,
+        exportedAt: '2026-09-08T10:00:00.000Z',
+        lists: [
+          {
+            id: 'custom-vacation',
+            name: 'Summer Vacation',
+            icon: '🏖️',
+            colorTheme: 'amber',
+            isSystem: false,
+          },
+        ],
+        tasks: [
+          {
+            id: 'custom-task-100',
+            title: 'Book resort tickets',
+            completed: false,
+            isImportant: true,
+            inMyDay: true,
+            myDayDate: '2026-09-08',
+            steps: [{ id: 'step-1', title: 'Check availability', completed: true }],
+            listId: 'custom-vacation',
+            createdAt: '2026-09-08T10:00:00.000Z',
+          },
+        ],
+      };
+
+      const backupFile = new File([JSON.stringify(backupData)], 'backup.json', {
+        type: 'application/json',
+      });
+
+      const fileInput = screen.getByTestId('import-backup-input');
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [backupFile] } });
+      });
+
+      // Verify success status
+      expect(await screen.findByRole('status')).toHaveTextContent(/backup restored successfully/i);
+
+      // Verify imported custom list appears in drawer
+      expect(screen.getByTestId('list-item-custom-vacation')).toBeInTheDocument();
+      expect(screen.getByText('Summer Vacation')).toBeInTheDocument();
+
+      // Switch to the newly imported list
+      fireEvent.click(screen.getByTestId('list-item-custom-vacation'));
+
+      // Verify imported task is visible
+      expect(screen.getByText('Book resort tickets')).toBeInTheDocument();
+      expect(screen.getByText('1 of 1 step')).toBeInTheDocument();
+
+      // Verify localStorage was updated
+      const storedLists = JSON.parse(localStorage.getItem(STORAGE_KEY_LISTS) || '[]');
+      const storedTasks = JSON.parse(localStorage.getItem(STORAGE_KEY_TASKS) || '[]');
+      expect(storedLists.some((l: { id: string }) => l.id === 'custom-vacation')).toBe(true);
+      expect(storedTasks.some((t: { id: string }) => t.id === 'custom-task-100')).toBe(true);
+    });
+
+    it('invalid JSON files trigger clear user error feedback without corrupting existing data', async () => {
+      render(<App />);
+
+      // Open drawer
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+
+      const fileInput = screen.getByTestId('import-backup-input');
+
+      // Test 1: Malformed JSON syntax
+      const malformedFile = new File(['{ this is not valid json!'], 'invalid.json', {
+        type: 'application/json',
+      });
+
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [malformedFile] } });
+      });
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveTextContent(/invalid json format/i);
+
+      // Verify existing tasks and lists were not corrupted
+      expect(screen.getByText('Personal')).toBeInTheDocument();
+      expect(screen.getByText('Work')).toBeInTheDocument();
+
+      // Test 2: Schema missing tasks array
+      const invalidSchemaFile = new File(
+        [JSON.stringify({ lists: [] })],
+        'no-tasks.json',
+        { type: 'application/json' }
+      );
+
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [invalidSchemaFile] } });
+      });
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/missing or invalid 'tasks' array/i);
+
+      // Test 3: Empty file
+      const emptyFile = new File(['   '], 'empty.json', { type: 'application/json' });
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [emptyFile] } });
+      });
+      expect(await screen.findByRole('alert')).toHaveTextContent(/backup file is empty/i);
+    });
+
+    it('full end-to-end export and import roundtrip preserves user data across simulated reload', async () => {
+      const { unmount } = render(<App />);
+
+      // Add a custom task to default list
+      const taskInput = screen.getByPlaceholderText('Add a task');
+      fireEvent.change(taskInput, { target: { value: 'Roundtrip Test Task' } });
+      fireEvent.click(screen.getByRole('button', { name: /add task/i }));
+
+      expect(await screen.findByText('Roundtrip Test Task')).toBeInTheDocument();
+
+      // Open drawer and export
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      fireEvent.click(screen.getByRole('button', { name: /export backup/i }));
+
+      expect(createObjectURLMock).toHaveBeenCalled();
+      const [exportedBlob] = createObjectURLMock.mock.calls[0] as [Blob];
+      const exportedJsonText = await exportedBlob.text();
+
+      // Simulate browser refresh with empty/reset state
+      unmount();
+      localStorage.clear();
+
+      // Re-render fresh app
+      const { unmount: unmountSecond } = render(<App />);
+      expect(screen.queryByText('Roundtrip Test Task')).not.toBeInTheDocument();
+
+      // Open drawer and import the exported backup
+      fireEvent.click(screen.getByRole('button', { name: /open navigation menu/i }));
+      const file = new File([exportedJsonText], 'backup-roundtrip.json', {
+        type: 'application/json',
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('import-backup-input'), {
+          target: { files: [file] },
+        });
+      });
+
+      expect(await screen.findByRole('status')).toHaveTextContent(/backup restored successfully/i);
+
+      // Close drawer
+      fireEvent.click(screen.getByTestId('close-drawer-btn'));
+
+      // Verify restored task is present
+      expect(screen.getByText('Roundtrip Test Task')).toBeInTheDocument();
+
+      // Simulate another reload to verify localStorage persistence
+      unmountSecond();
+      render(<App />);
+      expect(screen.getByText('Roundtrip Test Task')).toBeInTheDocument();
+    });
+
+    it('schema validation helpers validateBackupData and parseAndValidateBackup enforce rules strictly', () => {
+      expect(validateBackupData(null).valid).toBe(false);
+      expect(validateBackupData([]).valid).toBe(false);
+      expect(validateBackupData({ lists: 'not-array', tasks: [] }).valid).toBe(false);
+      expect(parseAndValidateBackup('').valid).toBe(false);
+      expect(parseAndValidateBackup('null').valid).toBe(false);
+      expect(parseAndValidateBackup('[]').valid).toBe(false);
+      expect(parseAndValidateBackup('{"lists": "not-array", "tasks": []}').valid).toBe(false);
+      expect(parseAndValidateBackup('{"lists": [], "tasks": "not-array"}').valid).toBe(false);
+      expect(
+        parseAndValidateBackup('{"lists": [{"id": ""}], "tasks": []}').valid
+      ).toBe(false);
+      expect(
+        parseAndValidateBackup('{"lists": [], "tasks": [{"id": "t1", "completed": false}]}').valid
+      ).toBe(false); // missing title
+
+      // Valid minimal structure
+      const valid = parseAndValidateBackup('{"lists": [], "tasks": []}');
+      expect(valid.valid).toBe(true);
+      if (valid.valid) {
+        expect(valid.data.lists.length).toBeGreaterThanOrEqual(3); // system lists ensured
+      }
+
+      // createBackupPayload formats properly
+      const payload = createBackupPayload([], []);
+      expect(payload.version).toBe(1);
+      expect(payload.lists.length).toBe(3); // system lists ensured
+      expect(payload.tasks).toEqual([]);
+    });
+  });
 });
+
