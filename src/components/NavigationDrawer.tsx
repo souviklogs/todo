@@ -1,5 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { X, ListTodo, User, Briefcase, Folder, Sun, Star, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import {
+  X,
+  ListTodo,
+  User,
+  Briefcase,
+  Folder,
+  Sun,
+  Star,
+  Plus,
+  Pencil,
+  Volume2,
+  VolumeX,
+  Download,
+  Upload,
+  AlertCircle,
+  CheckCircle,
+} from 'lucide-react';
 import {
   useTodoContext,
   DEFAULT_LIST,
@@ -7,6 +23,7 @@ import {
   MY_DAY_LIST,
   getLocalDateString,
 } from '../context/TodoContext';
+import { downloadBackupFile, readBackupFileText } from '../utils/backup';
 import { ListModal } from './ListModal';
 import type { TodoList, CreateTodoListInput } from '../types/todo';
 
@@ -71,11 +88,49 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
     deleteList,
     soundEnabled,
     toggleSound,
+    exportBackup,
+    importBackup,
   } = useTodoContext();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [targetList, setTargetList] = useState<TodoList | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportBackup = () => {
+    setImportError(null);
+    setImportSuccess(null);
+    const backup = exportBackup();
+    downloadBackupFile(backup);
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportError(null);
+    setImportSuccess(null);
+
+    try {
+      const text = await readBackupFileText(file);
+      const result = importBackup(text);
+      if (result.success) {
+        setImportSuccess('Backup restored successfully!');
+      } else {
+        setImportError(result.error ?? 'Invalid backup file.');
+      }
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : 'Failed to read backup file.'
+      );
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const activeCountsByList = useMemo(() => {
     const todayStr = getLocalDateString();
@@ -283,6 +338,76 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onCl
                 }`}
               />
             </button>
+          </div>
+
+          {/* Backup & Restore Panel */}
+          <div
+            data-testid="backup-restore-panel"
+            className="pt-2 border-t border-slate-100/80 dark:border-neutral-800/80 space-y-1"
+          >
+            <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">
+              Backup & Restore
+            </div>
+            <button
+              type="button"
+              data-testid="export-backup-btn"
+              aria-label="Export Backup"
+              onClick={handleExportBackup}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-800/50 transition-colors cursor-pointer text-left"
+            >
+              <div className="flex items-center gap-2.5">
+                <Download className="w-4 h-4 text-slate-500 dark:text-neutral-400" />
+                <span className="text-sm font-medium">Export Backup</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              data-testid="import-backup-btn"
+              aria-label="Import Backup"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-800/50 transition-colors cursor-pointer text-left"
+            >
+              <div className="flex items-center gap-2.5">
+                <Upload className="w-4 h-4 text-slate-500 dark:text-neutral-400" />
+                <span className="text-sm font-medium">Import Backup</span>
+              </div>
+            </button>
+
+            <input
+              ref={fileInputRef}
+              id="import-backup-input"
+              type="file"
+              accept=".json,application/json"
+              data-testid="import-backup-input"
+              aria-label="Import Backup"
+              className="hidden"
+              onChange={handleFileImport}
+            />
+
+            {/* Error Feedback */}
+            {importError && (
+              <div
+                role="alert"
+                data-testid="backup-error-message"
+                className="mx-3 mt-1.5 p-2 rounded-lg bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs font-medium flex items-start gap-1.5"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            {/* Success Feedback */}
+            {importSuccess && (
+              <div
+                role="status"
+                data-testid="backup-success-message"
+                className="mx-3 mt-1.5 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 text-xs font-medium flex items-center gap-1.5"
+              >
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>{importSuccess}</span>
+              </div>
+            )}
           </div>
         </div>
 

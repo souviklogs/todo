@@ -13,60 +13,29 @@ import type {
   CreateTodoListInput,
   UpdateTodoListInput,
   AddTaskOptions,
+  BackupData,
 } from '../types/todo';
 import { getLocalDateString } from '../types/todo';
 import { DEFAULT_THEME_ID } from '../constants/theme';
 import { triggerCompletionSensory } from '../utils/sensory';
+import {
+  createBackupPayload,
+  ensureSystemLists,
+  parseAndValidateBackup,
+  validateBackupData,
+} from '../utils/backup';
+import {
+  MY_DAY_LIST,
+  DEFAULT_LIST,
+  IMPORTANT_LIST,
+  DEFAULT_LISTS,
+} from '../constants/lists';
 
-export { getLocalDateString };
+export { getLocalDateString, MY_DAY_LIST, DEFAULT_LIST, IMPORTANT_LIST, DEFAULT_LISTS };
 
 export const STORAGE_KEY_TASKS = 'todo_tasks';
 export const STORAGE_KEY_LISTS = 'todo_lists';
 export const STORAGE_KEY_SOUND_ENABLED = 'todo_sound_enabled';
-
-export const MY_DAY_LIST: TodoList = {
-  id: 'my-day',
-  name: 'My Day',
-  icon: 'Sun',
-  colorTheme: 'sunrise',
-  isSystem: true,
-};
-
-export const DEFAULT_LIST: TodoList = {
-  id: 'tasks',
-  name: 'Tasks',
-  icon: 'ListTodo',
-  colorTheme: DEFAULT_THEME_ID,
-  isSystem: true,
-};
-
-export const IMPORTANT_LIST: TodoList = {
-  id: 'important',
-  name: 'Important',
-  icon: 'Star',
-  colorTheme: 'rose',
-  isSystem: true,
-};
-
-export const DEFAULT_LISTS: TodoList[] = [
-  MY_DAY_LIST,
-  DEFAULT_LIST,
-  IMPORTANT_LIST,
-  {
-    id: 'personal',
-    name: 'Personal',
-    icon: 'User',
-    colorTheme: 'purple',
-    isSystem: false,
-  },
-  {
-    id: 'work',
-    name: 'Work',
-    icon: 'Briefcase',
-    colorTheme: 'emerald',
-    isSystem: false,
-  },
-];
 
 export const DEFAULT_TASKS: Task[] = [
   {
@@ -185,24 +154,7 @@ export function loadStoredLists(): TodoList[] {
     DEFAULT_LISTS,
     (data) => Array.isArray(data) && data.length > 0
   );
-  if (!loaded.some((l) => l.id === MY_DAY_LIST.id)) {
-    loaded.unshift(MY_DAY_LIST);
-  } else {
-    const myDayIdx = loaded.findIndex((l) => l.id === MY_DAY_LIST.id);
-    if (myDayIdx > 0) {
-      const [myDayItem] = loaded.splice(myDayIdx, 1);
-      loaded.unshift(myDayItem);
-    }
-  }
-  if (!loaded.some((l) => l.id === IMPORTANT_LIST.id)) {
-    const tasksIdx = loaded.findIndex((l) => l.id === DEFAULT_LIST.id);
-    if (tasksIdx !== -1) {
-      loaded.splice(tasksIdx + 1, 0, IMPORTANT_LIST);
-    } else {
-      loaded.push(IMPORTANT_LIST);
-    }
-  }
-  return loaded;
+  return ensureSystemLists(loaded);
 }
 
 export function saveStoredLists(lists: TodoList[]): void {
@@ -235,6 +187,8 @@ interface TodoContextType {
   soundEnabled: boolean;
   setSoundEnabled: (enabled: boolean) => void;
   toggleSound: () => void;
+  exportBackup: () => BackupData;
+  importBackup: (backupInput: string | unknown) => { success: boolean; error?: string };
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -551,6 +505,46 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
     });
   }, []);
 
+  const exportBackup = useCallback((): BackupData => {
+    return createBackupPayload(lists, tasks);
+  }, [lists, tasks]);
+
+  const importBackup = useCallback(
+    (backupInput: string | unknown): { success: boolean; error?: string } => {
+      const validation =
+        typeof backupInput === 'string'
+          ? parseAndValidateBackup(backupInput)
+          : validateBackupData(backupInput);
+
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+
+      const { lists: importedLists, tasks: importedTasks } = validation.data;
+
+      // Rehydrate lists and tasks in state
+      setLists(importedLists);
+      setTasks(importedTasks);
+      tasksRef.current = importedTasks;
+
+      // Direct synchronization to localStorage
+      saveStoredLists(importedLists);
+      saveStoredTasks(importedTasks);
+
+      // Reset selected task if open
+      setSelectedTaskId(null);
+
+      // Ensure active currentList is valid
+      setCurrentList((prev) => {
+        const found = importedLists.find((l) => l.id === prev.id);
+        return found ?? DEFAULT_LIST;
+      });
+
+      return { success: true };
+    },
+    []
+  );
+
   return (
     <TodoContext.Provider
       value={{
@@ -579,6 +573,8 @@ export const TodoProvider: React.FC<TodoProviderProps> = ({
         soundEnabled,
         setSoundEnabled,
         toggleSound,
+        exportBackup,
+        importBackup,
       }}
     >
       {children}

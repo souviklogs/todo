@@ -122,3 +122,11 @@ export interface AddTaskOptions {
   inMyDay?: boolean;
   dueDate?: string | null;
 }
+
+export interface BackupData {
+  version: number;
+  exportedAt: string;
+  lists: TodoList[];
+  tasks: Task[];
+}
+
